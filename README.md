@@ -4,12 +4,10 @@ ETL project for analyzing healthcare system affiliates and facility capacity in 
 
 ## Team Members
 
-| Name | GitHub |
-|------|--------|
-| Deyton Riascos Ortiz | [@deyton-riascos](https://github.com/deyton-riascos) |
-| Samuel Izquierdo Bonilla | [@samuel-izquierdo](https://github.com/samuel-izquierdo) |
-| Daniel David Garcia Restrepo | [@daniel-garcia](https://github.com/daniel-garcia) |
-| Mauricio Taborda Gongora | [@mauricio-taborda](https://github.com/mauricio-taborda) |
+- **Deyton Riascos Ortiz** — [GitHub](https://github.com/driosoft-pro)
+- **Samuel Izquierdo Bonilla** — [GitHub](https://github.com/ZantaCruz)
+- **Daniel David Garcia Restrepo** — [GitHub](https://github.com/danielrestrepo13)
+- **Mauricio Taborda Gongora** — [GitHub](https://github.com/Taborda004)
 
 ## Project Structure
 
