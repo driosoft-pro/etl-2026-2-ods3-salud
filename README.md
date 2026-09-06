@@ -32,10 +32,22 @@ Proyecto ETL para el análisis de afiliados al sistema de salud y capacidad de I
 │   └── etl_main.py                             # Orquestador principal
 ├── notebooks/
 │   └── 01_validacion_limpieza_datos.ipynb      # Validación y limpieza
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py                             # Configuración de pytest
+│   ├── test_data_raw.py                        # Fixtures de datos
+│   ├── test_data_validation.py                 # Validación de datos raw
+│   ├── test_extract.py                         # Tests de extracción
+│   ├── test_transform.py                       # Tests de transformación
+│   ├── test_load.py                            # Tests de carga
+│   ├── test_integration.py                     # Tests de integración
+│   ├── run_tests.py                            # Script de ejecución
+│   └── requirements-tests.txt                  # Dependencias de tests
 ├── logs/                                       # Logs del proceso ETL
 ├── docker-compose.yml                          # Infraestructura Docker
 ├── Dockerfile                                  # Imagen del proceso ETL
 ├── requirements.txt                            # Dependencias Python
+├── run_tests.sh                                # Script rápido de tests
 ├── .env                                        # Variables de entorno (no subir a Git)
 ├── .env.example                                # Plantilla de variables
 ├── .gitignore
@@ -311,6 +323,68 @@ docker exec warehouse_salud pg_dump -U etl_user salud_colombia > backup.sql
 # Restaurar backup
 cat backup.sql | docker exec -i warehouse_salud psql -U etl_user -d salud_colombia
 ```
+
+---
+
+## Ejecución de Tests
+
+### Estructura de Tests
+
+```
+tests/
+├── test_data_validation.py    # Validación de datos raw
+├── test_extract.py           # Tests de extracción
+├── test_transform.py         # Tests de transformación
+├── test_load.py              # Tests de carga y conexión DB
+└── test_integration.py       # Tests de integración completa
+```
+
+### Ejecutar Tests
+
+```bash
+# Ejecutar todos los tests unitarios (sin DB)
+./run_tests.sh unit
+
+# Ejecutar tests de validación de datos
+./run_tests.sh data
+
+# Ejecutar tests de integración (requiere DB corriendo)
+./run_tests.sh integration
+
+# Ejecutar TODOS los tests
+./run_tests.sh all
+```
+
+### Ejecutar con Docker
+
+```bash
+# Ejecutar tests dentro del contenedor ETL
+docker-compose run --rm etl python -m pytest tests/ -v
+
+# Ejecutar solo tests unitarios
+docker-compose run --rm etl python -m pytest tests/ -v -m "unit"
+```
+
+### Ejecutar con pytest directamente
+
+```bash
+# Instalar dependencias de tests
+pip install -r tests/requirements-tests.txt
+
+# Ejecutar tests
+python -m pytest tests/ -v
+
+# Ejecutar con cobertura
+python -m pytest tests/ -v --cov=src --cov-report=html
+```
+
+### Tipos de Tests
+
+| Tipo | Marcador | Descripción | Requiere DB |
+|------|----------|-------------|-------------|
+| Unitarios | `@pytest.mark.unit` | Pruebas aisladas de funciones | No |
+| Datos | `@pytest.mark.data` | Validación de datasets raw | No |
+| Integración | `@pytest.mark.integration` | Pruebas con base de datos | Sí |
 
 ---
 
