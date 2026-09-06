@@ -4,104 +4,104 @@ import os
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'raw')
 
-AFILIADOS_FILE = 'Número_de_afiliados_por_departamento,_municipio_y_régimen_20260906.csv'
-IPS_FILE = 'Relación_de_IPS_públicas_y_privadas_según_el_nivel_de_atención_y_capacidad_instalada_20260906.csv'
+AFFILIATES_FILE = 'affiliates_by_department_municipality_regime_20260906.csv'
+FACILITIES_FILE = 'healthcare_facilities_by_level_capacity_20260906.csv'
 
 @pytest.mark.data
-class TestDataRawAfiliados:
+class TestRawDataAffiliates:
     
     @pytest.fixture(autouse=True)
-    def setup(self, df_afiliados_raw):
-        self.df = df_afiliados_raw
+    def setup(self, df_affiliates_raw):
+        self.df = df_affiliates_raw
     
-    def test_archivo_existe(self):
-        path = os.path.join(DATA_DIR, AFILIADOS_FILE)
-        assert os.path.exists(path), f"Archivo no encontrado: {AFILIADOS_FILE}"
+    def test_file_exists(self):
+        path = os.path.join(DATA_DIR, AFFILIATES_FILE)
+        assert os.path.exists(path), f"File not found: {AFFILIATES_FILE}"
     
-    def test_archivo_no_vacio(self):
-        assert len(self.df) > 0, "El dataset de afiliados está vacío"
+    def test_file_not_empty(self):
+        assert len(self.df) > 0, "Affiliates dataset is empty"
     
-    def test_columnas_esperadas(self):
-        columnas_esperadas = ['CodDepto', 'Departamento', 'CodMunicipio', 
-                              'Municipio', 'IDRegimen', 'Año', 'Mes', 'NumPersonas']
-        columnas_actuales = list(self.df.columns)
-        assert columnas_esperadas == columnas_actuales, \
-            f"Columnas esperadas: {columnas_esperadas}\nColumnas actuales: {columnas_actuales}"
+    def test_expected_columns(self):
+        expected_columns = ['CodDepto', 'Departamento', 'CodMunicipio', 
+                            'Municipio', 'IDRegimen', 'Año', 'Mes', 'NumPersonas']
+        actual_columns = list(self.df.columns)
+        assert expected_columns == actual_columns, \
+            f"Expected columns: {expected_columns}\nActual columns: {actual_columns}"
     
-    def test_no_completamente_vacio(self):
+    def test_not_all_null(self):
         for col in self.df.columns:
-            assert not self.df[col].isna().all(), f"Columna '{col}' está completamente vacía"
+            assert not self.df[col].isna().all(), f"Column '{col}' is completely empty"
     
-    def test_registros_minimos(self):
+    def test_minimum_records(self):
         assert len(self.df) >= 100, \
-            f"Se esperan al menos 100 registros, se encontraron {len(self.df)}"
+            f"Expected at least 100 records, found {len(self.df)}"
     
-    def test Departamento_no_nulos(self):
-        nulos = self.df['Departamento'].isna().sum()
-        assert nulos == 0, f"Hay {nulos} valores nulos en Departamento"
+    def test_department_not_null(self):
+        nulls = self.df['Departamento'].isna().sum()
+        assert nulls == 0, f"There are {nulls} null values in Department"
     
-    def test_municipio_no_nulos(self):
-        nulos = self.df['Municipio'].isna().sum()
-        assert nulos == 0, f"Hay {nulos} valores nulos en Municipio"
+    def test_municipality_not_null(self):
+        nulls = self.df['Municipio'].isna().sum()
+        assert nulls == 0, f"There are {nulls} null values in Municipality"
     
-    def test_regimen_valido(self):
+    def test_valid_regime(self):
         regimes = self.df['IDRegimen'].dropna().unique()
-        regimes_validos = {'S', 'E', 'C'}
-        regimes_invalidos = set(regimes) - regimes_validos
-        assert len(regimes_invalidos) == 0, \
-            f"Régimenes inválidos encontrados: {regimes_invalidos}"
+        valid_regimes = {'S', 'E', 'C'}
+        invalid_regimes = set(regimes) - valid_regimes
+        assert len(invalid_regimes) == 0, \
+            f"Invalid regimes found: {invalid_regimes}"
     
-    def test_anio_formato(self):
-        anios = self.df['Año'].dropna().unique()
-        for anio in anios:
-            assert anio.isdigit(), f"Año con formato inválido: {anio}"
-            assert 2000 <= int(anio) <= 2030, f"Año fuera de rango: {anio}"
+    def test_year_format(self):
+        years = self.df['Año'].dropna().unique()
+        for year in years:
+            assert year.isdigit(), f"Year with invalid format: {year}"
+            assert 2000 <= int(year) <= 2030, f"Year out of range: {year}"
     
-    def test_mes_rango(self):
-        meses = self.df['Mes'].dropna().unique()
-        for mes in meses:
-            assert mes.isdigit(), f"Mes con formato inválido: {mes}"
-            assert 1 <= int(mes) <= 12, f"Mes fuera de rango: {mes}"
+    def test_month_range(self):
+        months = self.df['Mes'].dropna().unique()
+        for month in months:
+            assert month.isdigit(), f"Month with invalid format: {month}"
+            assert 1 <= int(month) <= 12, f"Month out of range: {month}"
 
 
 @pytest.mark.data
-class TestDataRawIPS:
+class TestRawDataFacilities:
     
     @pytest.fixture(autouse=True)
-    def setup(self, df_ips_raw):
-        self.df = df_ips_raw
+    def setup(self, df_facilities_raw):
+        self.df = df_facilities_raw
     
-    def test_archivo_existe(self):
-        path = os.path.join(DATA_DIR, IPS_FILE)
-        assert os.path.exists(path), f"Archivo no encontrado: {IPS_FILE}"
+    def test_file_exists(self):
+        path = os.path.join(DATA_DIR, FACILITIES_FILE)
+        assert os.path.exists(path), f"File not found: {FACILITIES_FILE}"
     
-    def test_archivo_no_vacio(self):
-        assert len(self.df) > 0, "El dataset de IPS está vacío"
+    def test_file_not_empty(self):
+        assert len(self.df) > 0, "Facilities dataset is empty"
     
-    def test_columnas_esperadas(self):
-        columnas_esperadas = ['Departamento', 'Municipio', 'Código prestador', 
-                              'Nombre prestador', 'nit IPS ', 'num digito_verificion',
-                              'naturaleza', 'num nivel atencion', 'Código sede',
-                              'Número sede', 'nom sede IPS', 'Gerente', 'Dirección',
-                              'Email', 'Teléfono', 'nom grupo capacidad ',
-                              'nom descripcion capacidad ', 'num cantidad capacidad instalada',
-                              'Fecha Corte', 'Fuente']
-        columnas_actuales = list(self.df.columns)
-        assert columnas_esperadas == columnas_actuales, \
-            f"Columnas esperadas: {columnas_esperadas}\nColumnas actuales: {columnas_actuales}"
+    def test_expected_columns(self):
+        expected_columns = ['Departamento', 'Municipio', 'Código prestador', 
+                            'Nombre prestador', 'nit IPS ', 'num digito_verificion',
+                            'naturaleza', 'num nivel atencion', 'Código sede',
+                            'Número sede', 'nom sede IPS', 'Gerente', 'Dirección',
+                            'Email', 'Teléfono', 'nom grupo capacidad ',
+                            'nom descripcion capacidad ', 'num cantidad capacidad instalada',
+                            'Fecha Corte', 'Fuente']
+        actual_columns = list(self.df.columns)
+        assert expected_columns == actual_columns, \
+            f"Expected columns: {expected_columns}\nActual columns: {actual_columns}"
     
-    def test_registros_minimos(self):
+    def test_minimum_records(self):
         assert len(self.df) >= 1000, \
-            f"Se esperan al menos 1000 registros, se encontraron {len(self.df)}"
+            f"Expected at least 1000 records, found {len(self.df)}"
     
-    def test_naturaleza_valida(self):
-        naturalezas = self.df['naturaleza'].dropna().unique()
-        naturalezas_validas = {'Pública', 'Privada'}
-        for nat in naturalezas:
-            assert nat in naturalezas_validas, f"Naturaleza inválida: {nat}"
+    def test_valid_nature(self):
+        natures = self.df['naturaleza'].dropna().unique()
+        valid_natures = {'Pública', 'Privada'}
+        for nat in natures:
+            assert nat in valid_natures, f"Invalid nature: {nat}"
     
-    def test_nivel_atencion_rango(self):
-        niveles = self.df['num nivel atencion'].dropna().unique()
-        for nivel in niveles:
-            if nivel.isdigit():
-                assert 1 <= int(nivel) <= 5, f"Nivel de atención fuera de rango: {nivel}"
+    def test_care_level_range(self):
+        levels = self.df['num nivel atencion'].dropna().unique()
+        for level in levels:
+            if level.isdigit():
+                assert 1 <= int(level) <= 5, f"Care level out of range: {level}"

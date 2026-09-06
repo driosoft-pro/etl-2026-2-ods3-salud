@@ -1,41 +1,41 @@
 #!/bin/bash
 
 echo "=========================================="
-echo "  EJECUCIÓN DE TESTS - SALUD COLOMBIA"
+echo "  TEST EXECUTION - HEALTH COLOMBIA"
 echo "=========================================="
 
 case "$1" in
     "unit")
-        echo " Ejecutando tests unitarios..."
+        echo "Running unit tests..."
         python -m pytest tests/ -v -m "unit" --tb=short
         ;;
     "integration")
-        echo " Ejecutando tests de integración..."
+        echo "Running integration tests..."
         python -m pytest tests/ -v -m "integration" --tb=short
         ;;
     "data")
-        echo " Ejecutando tests de validación de datos..."
+        echo "Running data validation tests..."
         python -m pytest tests/ -v -m "data" --tb=short
         ;;
     "all")
-        echo " Ejecutando TODOS los tests..."
+        echo "Running ALL tests..."
         python -m pytest tests/ -v --tb=short
         ;;
     *)
         echo ""
-        echo "Uso: ./run_tests.sh [opción]"
+        echo "Usage: ./run_tests.sh [option]"
         echo ""
-        echo "Opciones:"
-        echo "  unit         Ejecutar tests unitarios"
-        echo "  integration  Ejecutar tests de integración"
-        echo "  data         Ejecutar tests de validación de datos"
-        echo "  all          Ejecutar todos los tests"
+        echo "Options:"
+        echo "  unit         Run unit tests"
+        echo "  integration  Run integration tests"
+        echo "  data         Run data validation tests"
+        echo "  all          Run all tests"
         echo ""
-        echo "Ejemplo: ./run_tests.sh unit"
+        echo "Example: ./run_tests.sh unit"
         ;;
 esac
 
 echo ""
 echo "=========================================="
-echo "  TESTS COMPLETADOS"
+echo "  TESTS COMPLETED"
 echo "=========================================="

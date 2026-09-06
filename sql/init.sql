@@ -1,140 +1,140 @@
 -- =====================================================
--- ESQUEMA DIMENSIONAL - SALUD COLOMBIA
+-- DIMENSIONAL SCHEMA - HEALTH COLOMBIA
 -- =====================================================
 
 -- =====================================================
--- DIMENSIONES
+-- DIMENSIONS
 -- =====================================================
 
--- Dimensión Tiempo
-CREATE TABLE dim_tiempo (
-    sk_tiempo SERIAL PRIMARY KEY,
-    anio INTEGER NOT NULL,
-    mes INTEGER NOT NULL,
-    nombre_mes VARCHAR(20) NOT NULL,
-    trimestre INTEGER NOT NULL,
-    semestre INTEGER NOT NULL,
-    fecha_completa DATE NOT NULL,
-    UNIQUE(anio, mes)
+-- Time Dimension
+CREATE TABLE dim_time (
+    sk_time SERIAL PRIMARY KEY,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    month_name VARCHAR(20) NOT NULL,
+    quarter INTEGER NOT NULL,
+    semester INTEGER NOT NULL,
+    full_date DATE NOT NULL,
+    UNIQUE(year, month)
 );
 
--- Dimensión Departamento
-CREATE TABLE dim_departamento (
-    sk_departamento SERIAL PRIMARY KEY,
-    codigo VARCHAR(5) NOT NULL UNIQUE,
-    nombre VARCHAR(100) NOT NULL
+-- Department Dimension
+CREATE TABLE dim_department (
+    sk_department SERIAL PRIMARY KEY,
+    code VARCHAR(5) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL
 );
 
--- Dimensión Municipio
-CREATE TABLE dim_municipio (
-    sk_municipio SERIAL PRIMARY KEY,
-    codigo VARCHAR(10) NOT NULL UNIQUE,
-    nombre VARCHAR(150) NOT NULL,
-    sk_departamento INTEGER NOT NULL REFERENCES dim_departamento(sk_departamento)
+-- Municipality Dimension
+CREATE TABLE dim_municipality (
+    sk_municipality SERIAL PRIMARY KEY,
+    code VARCHAR(10) NOT NULL UNIQUE,
+    name VARCHAR(150) NOT NULL,
+    sk_department INTEGER NOT NULL REFERENCES dim_department(sk_department)
 );
 
--- Dimensión Régimen
-CREATE TABLE dim_regimen (
-    sk_regimen SERIAL PRIMARY KEY,
-    codigo VARCHAR(5) NOT NULL UNIQUE,
-    descripcion VARCHAR(100) NOT NULL
+-- Regime Dimension
+CREATE TABLE dim_regime (
+    sk_regime SERIAL PRIMARY KEY,
+    code VARCHAR(5) NOT NULL UNIQUE,
+    description VARCHAR(100) NOT NULL
 );
 
--- Dimensión IPS (Institución Prestadora de Servicios)
-CREATE TABLE dim_ips (
-    sk_ips SERIAL PRIMARY KEY,
-    codigo_prestador VARCHAR(20) NOT NULL,
-    nombre VARCHAR(300) NOT NULL,
+-- Facility Dimension (Healthcare Institution)
+CREATE TABLE dim_facility (
+    sk_facility SERIAL PRIMARY KEY,
+    provider_code VARCHAR(20) NOT NULL,
+    name VARCHAR(300) NOT NULL,
     nit VARCHAR(20),
-    naturaleza VARCHAR(20),
-    nivel_atencion INTEGER,
-    gerente VARCHAR(200),
-    direccion VARCHAR(300),
+    nature VARCHAR(20),
+    care_level INTEGER,
+    manager VARCHAR(200),
+    address VARCHAR(300),
     email VARCHAR(200),
-    telefono VARCHAR(20),
-    sk_municipio INTEGER NOT NULL REFERENCES dim_municipio(sk_municipio),
-    UNIQUE(codigo_prestador, sk_municipio)
+    phone VARCHAR(20),
+    sk_municipality INTEGER NOT NULL REFERENCES dim_municipality(sk_municipality),
+    UNIQUE(provider_code, sk_municipality)
 );
 
--- Dimensión Tipo Capacidad
-CREATE TABLE dim_tipo_capacidad (
-    sk_tipo_capacidad SERIAL PRIMARY KEY,
-    grupo VARCHAR(50) NOT NULL,
-    descripcion VARCHAR(100) NOT NULL,
-    UNIQUE(grupo, descripcion)
-);
-
--- =====================================================
--- TABLAS DE HECHOS
--- =====================================================
-
--- Hecho: Afiliados por municipio, régimen y tiempo
-CREATE TABLE fact_afiliados (
-    sk_afiliado SERIAL PRIMARY KEY,
-    sk_tiempo INTEGER NOT NULL REFERENCES dim_tiempo(sk_tiempo),
-    sk_municipio INTEGER NOT NULL REFERENCES dim_municipio(sk_municipio),
-    sk_regimen INTEGER NOT NULL REFERENCES dim_regimen(sk_regimen),
-    num_personas BIGINT NOT NULL,
-    UNIQUE(sk_tiempo, sk_municipio, sk_regimen)
-);
-
--- Hecho: Capacidad instalada por IPS y tiempo
-CREATE TABLE fact_capacidad_ips (
-    sk_capacidad SERIAL PRIMARY KEY,
-    sk_tiempo INTEGER NOT NULL REFERENCES dim_tiempo(sk_tiempo),
-    sk_ips INTEGER NOT NULL REFERENCES dim_ips(sk_ips),
-    sk_tipo_capacidad INTEGER NOT NULL REFERENCES dim_tipo_capacidad(sk_tipo_capacidad),
-    cantidad_capacidad INTEGER NOT NULL,
-    UNIQUE(sk_tiempo, sk_ips, sk_tipo_capacidad)
+-- Capacity Type Dimension
+CREATE TABLE dim_capacity_type (
+    sk_capacity_type SERIAL PRIMARY KEY,
+    "group" VARCHAR(50) NOT NULL,
+    description VARCHAR(100) NOT NULL,
+    UNIQUE("group", description)
 );
 
 -- =====================================================
--- ÍNDICES PARA OPTIMIZACIÓN
+-- FACT TABLES
 -- =====================================================
 
-CREATE INDEX idx_fact_afiliados_tiempo ON fact_afiliados(sk_tiempo);
-CREATE INDEX idx_fact_afiliados_municipio ON fact_afiliados(sk_municipio);
-CREATE INDEX idx_fact_afiliados_regimen ON fact_afiliados(sk_regimen);
+-- Fact: Affiliates by municipality, regime, and time
+CREATE TABLE fact_affiliates (
+    sk_affiliate SERIAL PRIMARY KEY,
+    sk_time INTEGER NOT NULL REFERENCES dim_time(sk_time),
+    sk_municipality INTEGER NOT NULL REFERENCES dim_municipality(sk_municipality),
+    sk_regime INTEGER NOT NULL REFERENCES dim_regime(sk_regime),
+    num_persons BIGINT NOT NULL,
+    UNIQUE(sk_time, sk_municipality, sk_regime)
+);
 
-CREATE INDEX idx_fact_capacidad_tiempo ON fact_capacidad_ips(sk_tiempo);
-CREATE INDEX idx_fact_capacidad_ips ON fact_capacidad_ips(sk_ips);
-CREATE INDEX idx_fact_capacidad_tipo ON fact_capacidad_ips(sk_tipo_capacidad);
-
-CREATE INDEX idx_municipio_departamento ON dim_municipio(sk_departamento);
-CREATE INDEX idx_ips_municipio ON dim_ips(sk_municipio);
+-- Fact: Facility capacity by facility and time
+CREATE TABLE fact_facility_capacity (
+    sk_capacity SERIAL PRIMARY KEY,
+    sk_time INTEGER NOT NULL REFERENCES dim_time(sk_time),
+    sk_facility INTEGER NOT NULL REFERENCES dim_facility(sk_facility),
+    sk_capacity_type INTEGER NOT NULL REFERENCES dim_capacity_type(sk_capacity_type),
+    capacity_amount INTEGER NOT NULL,
+    UNIQUE(sk_time, sk_facility, sk_capacity_type)
+);
 
 -- =====================================================
--- VISTA RESUMEN
+-- INDEXES FOR OPTIMIZATION
 -- =====================================================
 
-CREATE VIEW v_resumen_afiliados AS
+CREATE INDEX idx_fact_affiliates_time ON fact_affiliates(sk_time);
+CREATE INDEX idx_fact_affiliates_municipality ON fact_affiliates(sk_municipality);
+CREATE INDEX idx_fact_affiliates_regime ON fact_affiliates(sk_regime);
+
+CREATE INDEX idx_fact_capacity_time ON fact_facility_capacity(sk_time);
+CREATE INDEX idx_fact_capacity_facility ON fact_facility_capacity(sk_facility);
+CREATE INDEX idx_fact_capacity_type ON fact_facility_capacity(sk_capacity_type);
+
+CREATE INDEX idx_municipality_department ON dim_municipality(sk_department);
+CREATE INDEX idx_facility_municipality ON dim_facility(sk_municipality);
+
+-- =====================================================
+-- SUMMARY VIEWS
+-- =====================================================
+
+CREATE VIEW v_affiliates_summary AS
 SELECT 
-    d.nombre AS departamento,
-    m.nombre AS municipio,
-    r.descripcion AS regimen,
-    t.anio,
-    t.mes,
-    t.nombre_mes,
-    f.num_personas
-FROM fact_afiliados f
-JOIN dim_tiempo t ON f.sk_tiempo = t.sk_tiempo
-JOIN dim_municipio m ON f.sk_municipio = m.sk_municipio
-JOIN dim_departamento d ON m.sk_departamento = d.sk_departamento
-JOIN dim_regimen r ON f.sk_regimen = r.sk_regimen;
+    d.name AS department,
+    m.name AS municipality,
+    r.description AS regime,
+    t.year,
+    t.month,
+    t.month_name,
+    f.num_persons
+FROM fact_affiliates f
+JOIN dim_time t ON f.sk_time = t.sk_time
+JOIN dim_municipality m ON f.sk_municipality = m.sk_municipality
+JOIN dim_department d ON m.sk_department = d.sk_department
+JOIN dim_regime r ON f.sk_regime = r.sk_regime;
 
-CREATE VIEW v_resumen_capacidad AS
+CREATE VIEW v_facility_summary AS
 SELECT 
-    d.nombre AS departamento,
-    m.nombre AS municipio,
-    i.nombre AS ips,
-    i.naturaleza,
-    tc.grupo AS tipo_grupo,
-    tc.descripcion AS tipo_capacidad,
-    t.anio,
-    c.cantidad_capacidad
-FROM fact_capacidad_ips c
-JOIN dim_tiempo t ON c.sk_tiempo = t.sk_tiempo
-JOIN dim_ips i ON c.sk_ips = i.sk_ips
-JOIN dim_municipio m ON i.sk_municipio = m.sk_municipio
-JOIN dim_departamento d ON m.sk_departamento = d.sk_departamento
-JOIN dim_tipo_capacidad tc ON c.sk_tipo_capacidad = tc.sk_tipo_capacidad;
+    d.name AS department,
+    m.name AS municipality,
+    i.name AS facility,
+    i.nature,
+    ct."group" AS capacity_group,
+    ct.description AS capacity_type,
+    t.year,
+    c.capacity_amount
+FROM fact_facility_capacity c
+JOIN dim_time t ON c.sk_time = t.sk_time
+JOIN dim_facility i ON c.sk_facility = i.sk_facility
+JOIN dim_municipality m ON i.sk_municipality = m.sk_municipality
+JOIN dim_department d ON m.sk_department = d.sk_department
+JOIN dim_capacity_type ct ON c.sk_capacity_type = ct.sk_capacity_type;

@@ -11,12 +11,12 @@ DB_CONFIG = {
 DATA_DIR = '/app/data/raw'
 
 DATASETS = {
-    'afiliados': 'Número_de_afiliados_por_departamento,_municipio_y_régimen_20260906.csv',
-    'ips': 'Relación_de_IPS_públicas_y_privadas_según_el_nivel_de_atención_y_capacidad_instalada_20260906.csv'
+    'affiliates': 'affiliates_by_department_municipality_regime_20260906.csv',
+    'facilities': 'healthcare_facilities_by_level_capacity_20260906.csv'
 }
 
-MESES = {
-    1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
-    5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
-    9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+MONTHS = {
+    1: 'January', 2: 'February', 3: 'March', 4: 'April',
+    5: 'May', 6: 'June', 7: 'July', 8: 'August',
+    9: 'September', 10: 'October', 11: 'November', 12: 'December'
 }

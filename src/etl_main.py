@@ -2,10 +2,10 @@ import logging
 import sys
 from .extract import extract_all
 from .transform import (
-    clean_afiliados, clean_ips,
-    build_dim_tiempo, build_dim_departamento, build_dim_municipio,
-    build_dim_regimen, build_dim_ips, build_dim_tipo_capacidad,
-    build_fact_afiliados, build_fact_capacidad
+    clean_affiliates, clean_facilities,
+    build_dim_time, build_dim_department, build_dim_municipality,
+    build_dim_regime, build_dim_facility, build_dim_capacity_type,
+    build_fact_affiliates, build_fact_facility_capacity
 )
 from .load import load_all
 
@@ -21,62 +21,62 @@ logger = logging.getLogger(__name__)
 
 def run_etl():
     logger.info("=" * 60)
-    logger.info("INICIO DEL PROCESO ETL - SALUD COLOMBIA")
+    logger.info("ETL PROCESS STARTED - HEALTH COLOMBIA")
     logger.info("=" * 60)
     
     try:
-        logger.info("FASE 1: EXTRACCIÓN")
+        logger.info("PHASE 1: EXTRACTION")
         raw_data = extract_all()
         
-        logger.info("FASE 2: TRANSFORMACIÓN")
-        df_afiliados = clean_afiliados(raw_data['afiliados'])
-        df_ips = clean_ips(raw_data['ips'])
+        logger.info("PHASE 2: TRANSFORMATION")
+        df_affiliates = clean_affiliates(raw_data['affiliates'])
+        df_facilities = clean_facilities(raw_data['facilities'])
         
-        logger.info("Construyendo dimensiones...")
-        dim_tiempo = build_dim_tiempo(df_afiliados, df_ips)
-        dim_departamento = build_dim_departamento(df_afiliados, df_ips)
-        dim_municipio = build_dim_municipio(df_afiliados, df_ips, dim_departamento)
-        dim_regimen = build_dim_regimen(df_afiliados)
-        dim_ips = build_dim_ips(df_ips, dim_municipio)
-        dim_tipo_capacidad = build_dim_tipo_capacidad(df_ips)
+        logger.info("Building dimensions...")
+        dim_time = build_dim_time(df_affiliates, df_facilities)
+        dim_department = build_dim_department(df_affiliates, df_facilities)
+        dim_municipality = build_dim_municipality(df_affiliates, df_facilities, dim_department)
+        dim_regime = build_dim_regime(df_affiliates)
+        dim_facility = build_dim_facility(df_facilities, dim_municipality)
+        dim_capacity_type = build_dim_capacity_type(df_facilities)
         
-        logger.info("Construyendo tablas de hechos...")
-        fact_afiliados = build_fact_afiliados(df_afiliados, dim_tiempo, dim_municipio, dim_regimen)
-        fact_capacidad = build_fact_capacidad(df_ips, dim_tiempo, dim_ips, dim_tipo_capacidad)
+        logger.info("Building fact tables...")
+        fact_affiliates = build_fact_affiliates(df_affiliates, dim_time, dim_municipality, dim_regime)
+        fact_capacity = build_fact_facility_capacity(df_facilities, dim_time, dim_facility, dim_capacity_type)
         
         dimensions = {
-            'tiempo': dim_tiempo,
-            'departamento': dim_departamento,
-            'municipio': dim_municipio,
-            'regimen': dim_regimen,
-            'ips': dim_ips,
-            'tipo_capacidad': dim_tipo_capacidad
+            'time': dim_time,
+            'department': dim_department,
+            'municipality': dim_municipality,
+            'regime': dim_regime,
+            'facility': dim_facility,
+            'capacity_type': dim_capacity_type
         }
         
         facts = {
-            'afiliados': fact_afiliados,
-            'capacidad': fact_capacidad
+            'affiliates': fact_affiliates,
+            'capacity': fact_capacity
         }
         
-        logger.info("FASE 3: CARGA")
+        logger.info("PHASE 3: LOADING")
         load_all(dimensions, facts)
         
         logger.info("=" * 60)
-        logger.info("PROCESO ETL COMPLETADO EXITOSAMENTE")
+        logger.info("ETL PROCESS COMPLETED SUCCESSFULLY")
         logger.info("=" * 60)
         
-        print("\n RESUMEN DE CARGA:")
-        print(f"   dim_tiempo:          {len(dim_tiempo)} registros")
-        print(f"   dim_departamento:    {len(dim_departamento)} registros")
-        print(f"   dim_municipio:       {len(dim_municipio)} registros")
-        print(f"   dim_regimen:         {len(dim_regimen)} registros")
-        print(f"   dim_ips:             {len(dim_ips)} registros")
-        print(f"   dim_tipo_capacidad:  {len(dim_tipo_capacidad)} registros")
-        print(f"   fact_afiliados:      {len(fact_afiliados)} registros")
-        print(f"   fact_capacidad_ips:  {len(fact_capacidad)} registros")
+        print("\n LOAD SUMMARY:")
+        print(f"   dim_time:          {len(dim_time)} records")
+        print(f"   dim_department:    {len(dim_department)} records")
+        print(f"   dim_municipality:  {len(dim_municipality)} records")
+        print(f"   dim_regime:        {len(dim_regime)} records")
+        print(f"   dim_facility:      {len(dim_facility)} records")
+        print(f"   dim_capacity_type: {len(dim_capacity_type)} records")
+        print(f"   fact_affiliates:   {len(fact_affiliates)} records")
+        print(f"   fact_capacity:     {len(fact_capacity)} records")
         
     except Exception as e:
-        logger.error(f"Error en el proceso ETL: {e}")
+        logger.error(f"ETL process error: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':

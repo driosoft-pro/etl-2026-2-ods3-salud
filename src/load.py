@@ -10,7 +10,7 @@ def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
 def load_dimension(conn, table_name: str, df: pd.DataFrame, pk_col: str):
-    logger.info(f"Cargando dimensión {table_name}: {len(df)} registros")
+    logger.info(f"Loading dimension {table_name}: {len(df)} records")
     
     cursor = conn.cursor()
     
@@ -26,11 +26,11 @@ def load_dimension(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     execute_values(cursor, insert_sql, values)
     conn.commit()
     
-    logger.info(f"Dimensión {table_name} cargada correctamente")
+    logger.info(f"Dimension {table_name} loaded successfully")
     cursor.close()
 
 def load_fact(conn, table_name: str, df: pd.DataFrame, pk_col: str):
-    logger.info(f"Cargando tabla de hechos {table_name}: {len(df)} registros")
+    logger.info(f"Loading fact table {table_name}: {len(df)} records")
     
     cursor = conn.cursor()
     
@@ -46,28 +46,28 @@ def load_fact(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     execute_values(cursor, insert_sql, values)
     conn.commit()
     
-    logger.info(f"Tabla de hechos {table_name} cargada correctamente")
+    logger.info(f"Fact table {table_name} loaded successfully")
     cursor.close()
 
 def load_all(dimensions: dict, facts: dict):
     conn = get_connection()
     
     try:
-        load_dimension(conn, 'dim_tiempo', dimensions['tiempo'], 'sk_tiempo')
-        load_dimension(conn, 'dim_departamento', dimensions['departamento'], 'sk_departamento')
-        load_dimension(conn, 'dim_municipio', dimensions['municipio'], 'sk_municipio')
-        load_dimension(conn, 'dim_regimen', dimensions['regimen'], 'sk_regimen')
-        load_dimension(conn, 'dim_ips', dimensions['ips'], 'sk_ips')
-        load_dimension(conn, 'dim_tipo_capacidad', dimensions['tipo_capacidad'], 'sk_tipo_capacidad')
+        load_dimension(conn, 'dim_time', dimensions['time'], 'sk_time')
+        load_dimension(conn, 'dim_department', dimensions['department'], 'sk_department')
+        load_dimension(conn, 'dim_municipality', dimensions['municipality'], 'sk_municipality')
+        load_dimension(conn, 'dim_regime', dimensions['regime'], 'sk_regime')
+        load_dimension(conn, 'dim_facility', dimensions['facility'], 'sk_facility')
+        load_dimension(conn, 'dim_capacity_type', dimensions['capacity_type'], 'sk_capacity_type')
         
-        load_fact(conn, 'fact_afiliados', facts['afiliados'], 'sk_afiliado')
-        load_fact(conn, 'fact_capacidad_ips', facts['capacidad'], 'sk_capacidad')
+        load_fact(conn, 'fact_affiliates', facts['affiliates'], 'sk_affiliate')
+        load_fact(conn, 'fact_facility_capacity', facts['capacity'], 'sk_capacity')
         
-        logger.info("Carga completada exitosamente")
+        logger.info("Load completed successfully")
         
     except Exception as e:
         conn.rollback()
-        logger.error(f"Error durante la carga: {e}")
+        logger.error(f"Error during load: {e}")
         raise
     finally:
         conn.close()

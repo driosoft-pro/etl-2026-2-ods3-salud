@@ -1,140 +1,140 @@
-# Análisis de Salud en Colombia - Warehouse Dimensional
+# Health Analytics Colombia - Dimensional Data Warehouse
 
-Proyecto ETL para el análisis de afiliados al sistema de salud y capacidad de IPS en Colombia. Utiliza Docker y PostgreSQL como data warehouse dimensional.
+ETL project for analyzing healthcare system affiliates and facility capacity in Colombia. Uses Docker and PostgreSQL as a dimensional data warehouse.
 
-## Integrantes del Equipo
+## Team Members
 
-| Nombre | GitHub |
-|--------|--------|
+| Name | GitHub |
+|------|--------|
 | Deyton Riascos Ortiz | [@deyton-riascos](https://github.com/deyton-riascos) |
 | Samuel Izquierdo Bonilla | [@samuel-izquierdo](https://github.com/samuel-izquierdo) |
 | Daniel David Garcia Restrepo | [@daniel-garcia](https://github.com/daniel-garcia) |
 | Mauricio Taborda Gongora | [@mauricio-taborda](https://github.com/mauricio-taborda) |
 
-## Estructura del Proyecto
+## Project Structure
 
 ```
 ├── data/
-│   ├── raw/                                    # Datos originales de SISPRO
-│   │   ├── Número_de_afiliados_por_departamento,_municipio_y_régimen_20260906.csv
-│   │   └── Relación_de_IPS_públicas_y_privadas_según_el_nivel_de_atención_y_capacidad_instalada_20260906.csv
-│   └── processed/                              # Datos limpios (generados)
+│   ├── raw/                                    # Original data from SISPRO
+│   │   ├── affiliates_by_department_municipality_regime_20260906.csv
+│   │   └── healthcare_facilities_by_level_capacity_20260906.csv
+│   └── processed/                              # Clean data (generated)
 ├── docs/
 │   └── ETL_2026-2_Project_FirstDelivery.pdf
 ├── sql/
-│   └── init.sql                                # Esquema dimensional
+│   └── init.sql                                # Dimensional schema
 ├── src/
 │   ├── __init__.py
-│   ├── config.py                               # Configuración del proyecto
-│   ├── extract.py                              # Fase de extracción
-│   ├── transform.py                            # Fase de transformación
-│   ├── load.py                                 # Fase de carga
-│   └── etl_main.py                             # Orquestador principal
-├── notebooks/
-│   └── 01_validacion_limpieza_datos.ipynb      # Validación y limpieza
+│   ├── config.py                               # Project configuration
+│   ├── extract.py                              # Extraction phase
+│   ├── transform.py                            # Transformation phase
+│   ├── load.py                                 # Load phase
+│   └── etl_main.py                             # Main orchestrator
 ├── tests/
 │   ├── __init__.py
-│   ├── conftest.py                             # Configuración de pytest
-│   ├── test_data_raw.py                        # Fixtures de datos
-│   ├── test_data_validation.py                 # Validación de datos raw
-│   ├── test_extract.py                         # Tests de extracción
-│   ├── test_transform.py                       # Tests de transformación
-│   ├── test_load.py                            # Tests de carga
-│   ├── test_integration.py                     # Tests de integración
-│   ├── run_tests.py                            # Script de ejecución
-│   └── requirements-tests.txt                  # Dependencias de tests
-├── logs/                                       # Logs del proceso ETL
-├── docker-compose.yml                          # Infraestructura Docker
-├── Dockerfile                                  # Imagen del proceso ETL
-├── requirements.txt                            # Dependencias Python
-├── run_tests.sh                                # Script rápido de tests
-├── .env                                        # Variables de entorno (no subir a Git)
-├── .env.example                                # Plantilla de variables
+│   ├── conftest.py                             # Pytest configuration
+│   ├── test_data_raw.py                        # Raw data fixtures
+│   ├── test_data_validation.py                 # Raw data validation
+│   ├── test_extract.py                         # Extraction tests
+│   ├── test_transform.py                       # Transformation tests
+│   ├── test_load.py                            # Load tests
+│   ├── test_integration.py                     # Integration tests
+│   ├── run_tests.py                            # Test runner script
+│   └── requirements-tests.txt                  # Test dependencies
+├── notebooks/
+│   └── 01_data_validation_cleanup.ipynb        # Validation and cleanup
+├── logs/                                       # ETL process logs
+├── docker-compose.yml                          # Docker infrastructure
+├── Dockerfile                                  # ETL process image
+├── requirements.txt                            # Python dependencies
+├── run_tests.sh                                # Quick test runner
+├── .env                                        # Environment variables (not in Git)
+├── .env.example                                # Variables template
 ├── .gitignore
 └── README.md
 ```
 
-## Esquema Dimensional
+## Dimensional Schema
 
-### Modelo Star
+### Star Model
 
 ```
                     ┌─────────────────┐
-                    │   dim_tiempo    │
+                    │   dim_time      │
                     └────────┬────────┘
                              │
 ┌─────────────────┐    ┌─────┴─────┐    ┌─────────────────┐
-│ dim_departamento├────┤fact_afiliados├────┤   dim_regimen   │
+│ dim_department  ├────┤fact_affiliates├──┤   dim_regime    │
 └────────┬────────┘    └─────┬─────┘    └─────────────────┘
          │                   │
 ┌────────┴────────┐          │          ┌─────────────────┐
-│  dim_municipio  ├──────────┴──────────┤    dim_ips      │
+│ dim_municipality├──────────┴──────────┤ dim_facility    │
 └─────────────────┘                     └────────┬────────┘
                                                  │
                                         ┌────────┴────────┐
-                                        │dim_tipo_capacidad│
+                                        │dim_capacity_type│
                                         └─────────────────┘
 ```
 
-**Tablas de Hechos:**
-- `fact_afiliados`: Número de personas afiliadas por municipio, régimen y tiempo
-- `fact_capacidad_ips`: Capacidad instalada por IPS y tipo de capacidad
+**Fact Tables:**
+- `fact_affiliates`: Number of affiliated persons by municipality, regime, and time
+- `fact_facility_capacity`: Installed capacity by facility and capacity type
 
-**Dimensiones:**
-- `dim_tiempo`: Año, mes, trimestre, semestre
-- `dim_departamento`: Código y nombre del departamento
-- `dim_municipio`: Código, nombre y departamento
-- `dim_regimen`: Código y descripción del régimen (Subsidado, Especial, Contributivo)
-- `dim_ips`: Datos de las Instituciones Prestadoras de Servicios
-- `dim_tipo_capacidad`: Grupo y descripción de capacidad (CAMAS, CAMILLAS, etc.)
+**Dimensions:**
+- `dim_time`: Year, month, quarter, semester
+- `dim_department`: Code and department name
+- `dim_municipality`: Code, name, and department
+- `dim_regime`: Code and regime description (Subsidized, Special, Contributory)
+- `dim_facility`: Healthcare facility (IPS) data
+- `dim_capacity_type`: Group and capacity description (BEDS, STRETCHERS, etc.)
 
-## Infraestructura Docker
+## Docker Infrastructure
 
-| Servicio | Puerto | Descripción | URL |
-|----------|--------|-------------|-----|
+| Service | Port | Description | URL |
+|---------|------|-------------|-----|
 | PostgreSQL | 5432 | Data Warehouse | localhost:5432 |
-| pgAdmin | 5050 | Interfaz web para BD | http://localhost:5050 |
-| ETL | - | Proceso de transformación | - |
+| pgAdmin | 5050 | Database web interface | http://localhost:5050 |
+| ETL | - | Transformation process | - |
 
 ---
 
-## Guía de Instalación y Ejecución
+## Installation and Execution Guide
 
-### Requisitos Previos
+### Prerequisites
 
-| Software | Versión Mínima | Instalación |
-|----------|----------------|-------------|
+| Software | Minimum Version | Installation |
+|----------|-----------------|--------------|
 | Git | 2.0+ | `sudo apt install git` |
 | Docker | 20.10+ | [docs.docker.com](https://docs.docker.com/engine/install/) |
 | Docker Compose | 2.0+ | [docs.docker.com](https://docs.docker.com/compose/install/) |
-| Python | 3.8+ | Solo para notebooks externos |
-| Power BI Desktop | Última | [powerbi.microsoft.com](https://powerbi.microsoft.com/) |
+| Python | 3.8+ | Only for external notebooks |
+| Power BI Desktop | Latest | [powerbi.microsoft.com](https://powerbi.microsoft.com/) |
 
 ---
 
-### Paso 1: Clonar el Repositorio
+### Step 1: Clone the Repository
 
 ```bash
-# Clonar
-git clone https://github.com/username/salud-colombia-etl.git
+# Clone
+git clone git@github.com:driosoft-pro/etl-2026-2-ods3-salud.git
 
-# Entrar al directorio
-cd salud-colombia-etl
+# Enter directory
+cd etl-2026-2-ods3-salud
 ```
 
 ---
 
-### Paso 2: Configurar Variables de Entorno
+### Step 2: Configure Environment Variables
 
 ```bash
-# Copiar archivo de ejemplo
+# Copy example file
 cp .env.example .env
 
-# Editar con tus preferencias (opcional)
+# Edit with your preferences (optional)
 nano .env
 ```
 
-**Contenido del `.env`:**
+**`.env` content:**
 ```bash
 POSTGRES_DB=salud_colombia
 POSTGRES_USER=etl_user
@@ -147,63 +147,63 @@ PGADMIN_DEFAULT_PASSWORD=admin123
 
 ---
 
-### Paso 3: Levantar Infraestructura Docker
+### Step 3: Start Docker Infrastructure
 
 ```bash
-# Construir imágenes y levantar servicios
+# Build images and start services
 docker-compose up -d
 
-# Verificar que los contenedores estén corriendo
+# Verify containers are running
 docker-compose ps
 
-# Ver logs de PostgreSQL (esperar "ready to accept connections")
+# View PostgreSQL logs (wait for "ready to accept connections")
 docker logs -f warehouse_salud
 ```
 
-**Salida esperada:**
+**Expected output:**
 ```
 warehouse_salud  | LOG:  database system is ready to accept connections
 ```
 
 ---
 
-### Paso 4: Ejecutar el Proceso ETL
+### Step 4: Run ETL Process
 
 ```bash
-# Ejecutar el proceso ETL completo
+# Run complete ETL process
 docker-compose run --rm etl
 ```
 
-**Salida esperada:**
+**Expected output:**
 ```
 ============================================================
-INICIO DEL PROCESO ETL - SALUD COLOMBIA
+ETL PROCESS STARTED - HEALTH COLOMBIA
 ============================================================
-FASE 1: EXTRACCIÓN
-FASE 2: TRANSFORMACIÓN
-FASE 3: CARGA
+PHASE 1: EXTRACTION
+PHASE 2: TRANSFORMATION
+PHASE 3: LOADING
 ============================================================
-PROCESO ETL COMPLETADO EXITOSAMENTE
+ETL PROCESS COMPLETED SUCCESSFULLY
 ============================================================
 
-RESUMEN DE CARGA:
-   dim_tiempo:          XX registros
-   dim_departamento:    XX registros
-   dim_municipio:       XX registros
+LOAD SUMMARY:
+   dim_time:          XX records
+   dim_department:    XX records
+   dim_municipality:  XX records
    ...
 ```
 
 ---
 
-### Paso 5: Acceder a pgAdmin
+### Step 5: Access pgAdmin
 
-1. Abrir navegador: **http://localhost:5050**
-2. Iniciar sesión:
+1. Open browser: **http://localhost:5050**
+2. Login:
    - Email: `admin@salud.com`
    - Password: `admin123`
-3. Registrar servidor:
-   - Click derecho en "Servers" → "Register" → "Server"
-   - **General → Name:** `Salud Colombia`
+3. Register server:
+   - Right-click "Servers" → "Register" → "Server"
+   - **General → Name:** `Health Colombia`
    - **Connection → Tab "Connection":**
      - Host name/address: `postgres`
      - Port: `5432`
@@ -214,242 +214,242 @@ RESUMEN DE CARGA:
 
 ---
 
-### Paso 6: Ejecutar Notebook de Validación (Opcional)
+### Step 6: Run Validation Notebook (Optional)
 
 ```bash
-# Levantar Jupyter Notebook
+# Start Jupyter Notebook
 docker-compose run --rm -p 8888:8888 etl jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
 
-# Abrir en navegador: http://localhost:8888
+# Open in browser: http://localhost:8888
 ```
 
 ---
 
-## Conexión con Power BI (Linux)
+## Power BI Connection (Linux)
 
-Power BI Desktop es una aplicación de Windows, pero se puede usar en Linux mediante:
+Power BI Desktop is a Windows application, but can be used on Linux via:
 
-### Opción 1: Power BI Service (Recomendada para Linux)
+### Option 1: Power BI Service (Recommended for Linux)
 
-1. Abrir Power BI Service: https://app.powerbi.com
-2. Click en "Get Data" → "Database" → "PostgreSQL database"
-3. Configurar conexión:
+1. Open Power BI Service: https://app.powerbi.com
+2. Click "Get Data" → "Database" → "PostgreSQL database"
+3. Configure connection:
    - **Server:** `localhost:5432`
    - **Database:** `salud_colombia`
-4. Ingresar credenciales:
+4. Enter credentials:
    - Username: `etl_user`
    - Password: `etl_password_2026`
-5. Seleccionar tablas a importar
+5. Select tables to import
 
-### Opción 2: Power BI Desktop via Wine (Linux)
+### Option 2: Power BI Desktop via Wine (Linux)
 
 ```bash
-# Instalar Wine (Ubuntu/Debian)
+# Install Wine (Ubuntu/Debian)
 sudo dpkg --add-architecture i386
 sudo apt update
 sudo apt install wine64 wine32
 
-# Descargar Power BI Desktop
+# Download Power BI Desktop
 wget https://download.microsoft.com/download/8/6/6/866C4D51-A3D0-46CF-8B1D-B3F1AD78B362/PBIDesktopSetup_x64.exe
 
-# Instalar via Wine
+# Install via Wine
 wine PBIDesktopSetup_x64.exe
 
-# Ejecutar
+# Run
 wine ~/.wine/drive_c/Program\ Files/Microsoft\ Power\ BI\ Desktop/bin/PBIDesktop.exe
 ```
 
-### Opción 3: Conexión Directa via Puente de Red
+### Option 3: Direct Connection via Network Bridge
 
-PostgreSQL en Docker ya expone el puerto 5432 al host. Power BI puede conectarse directamente:
+PostgreSQL in Docker already exposes port 5432 to the host. Power BI can connect directly:
 
 ```
 Power BI Desktop (Windows)
     ↓ localhost:5432
 Docker Container (PostgreSQL)
-    ↓ Puerto 5432 interno
-Base de Datos salud_colombia
+    ↓ Internal port 5432
+Database salud_colombia
 ```
 
-**Configuración en Power BI:**
+**Power BI Configuration:**
 1. Get Data → PostgreSQL
-2. Server: `localhost` o `127.0.0.1`
+2. Server: `localhost` or `127.0.0.1`
 3. Port: `5432`
 4. Database: `salud_colombia`
 5. Username: `etl_user`
 6. Password: `etl_password_2026`
 
-### Tablas Disponibles para Power BI
+### Tables Available for Power BI
 
-| Tabla | Descripción | Uso Recomendado |
+| Table | Description | Recommended Use |
 |-------|-------------|-----------------|
-| `v_resumen_afiliados` | Vista consolidada de afiliados | Análisis por departamento/municipio |
-| `v_resumen_capacidad` | Vista consolidada de IPS | Análisis de capacidad instalada |
-| `fact_afiliados` | Hechos de afiliados | Modelado dimensional |
-| `fact_capacidad_ips` | Hechos de capacidad | Modelado dimensional |
-| `dim_tiempo` | Dimensión temporal | Filtros por año/mes/trimestre |
-| `dim_departamento` | Dimensión geográfica | Filtros por departamento |
-| `dim_municipio` | Dimensión geográfica | Filtros por municipio |
-| `dim_regimen` | Dimensión de régimen | Filtros por tipo de régimen |
-| `dim_ips` | Dimensión de IPS | Análisis por institución |
-| `dim_tipo_capacidad` | Dimensión de capacidad | Filtros por tipo de recurso |
+| `v_affiliates_summary` | Consolidated affiliates view | Analysis by department/municipality |
+| `v_facility_summary` | Consolidated facility view | Installed capacity analysis |
+| `fact_affiliates` | Affiliates facts | Dimensional modeling |
+| `fact_facility_capacity` | Capacity facts | Dimensional modeling |
+| `dim_time` | Time dimension | Filters by year/month/quarter |
+| `dim_department` | Geographic dimension | Filters by department |
+| `dim_municipality` | Geographic dimension | Filters by municipality |
+| `dim_regime` | Regime dimension | Filters by regime type |
+| `dim_facility` | Facility dimension | Analysis by institution |
+| `dim_capacity_type` | Capacity dimension | Filters by resource type |
 
 ---
 
-## Comandos Útiles Docker
+## Useful Docker Commands
 
 ```bash
-# Ver estado de contenedores
+# View container status
 docker-compose ps
 
-# Ver logs en tiempo real
+# View logs in real time
 docker-compose logs -f
 
-# Detener todos los servicios
+# Stop all services
 docker-compose down
 
-# Detener y eliminar volúmenes (limpiar datos)
+# Stop and remove volumes (clean data)
 docker-compose down -v
 
-# Reconstruir imágenes
+# Rebuild images
 docker-compose build --no-cache
 
-# Entrar al contenedor de PostgreSQL
+# Enter PostgreSQL container
 docker exec -it warehouse_salud psql -U etl_user -d salud_colombia
 
-# Backup de la base de datos
+# Database backup
 docker exec warehouse_salud pg_dump -U etl_user salud_colombia > backup.sql
 
-# Restaurar backup
+# Restore backup
 cat backup.sql | docker exec -i warehouse_salud psql -U etl_user -d salud_colombia
 ```
 
 ---
 
-## Ejecución de Tests
+## Test Execution
 
-### Estructura de Tests
+### Test Structure
 
 ```
 tests/
-├── test_data_validation.py    # Validación de datos raw
-├── test_extract.py           # Tests de extracción
-├── test_transform.py         # Tests de transformación
-├── test_load.py              # Tests de carga y conexión DB
-└── test_integration.py       # Tests de integración completa
+├── test_data_validation.py    # Raw data validation
+├── test_extract.py           # Extraction tests
+├── test_transform.py         # Transformation tests
+├── test_load.py              # Load and DB connection tests
+└── test_integration.py       # Full integration tests
 ```
 
-### Ejecutar Tests
+### Run Tests
 
 ```bash
-# Ejecutar todos los tests unitarios (sin DB)
+# Run all unit tests (no DB required)
 ./run_tests.sh unit
 
-# Ejecutar tests de validación de datos
+# Run data validation tests
 ./run_tests.sh data
 
-# Ejecutar tests de integración (requiere DB corriendo)
+# Run integration tests (DB required)
 ./run_tests.sh integration
 
-# Ejecutar TODOS los tests
+# Run ALL tests
 ./run_tests.sh all
 ```
 
-### Ejecutar con Docker
+### Run with Docker
 
 ```bash
-# Ejecutar tests dentro del contenedor ETL
+# Run tests inside ETL container
 docker-compose run --rm etl python -m pytest tests/ -v
 
-# Ejecutar solo tests unitarios
+# Run only unit tests
 docker-compose run --rm etl python -m pytest tests/ -v -m "unit"
 ```
 
-### Ejecutar con pytest directamente
+### Run with pytest Directly
 
 ```bash
-# Instalar dependencias de tests
+# Install test dependencies
 pip install -r tests/requirements-tests.txt
 
-# Ejecutar tests
+# Run tests
 python -m pytest tests/ -v
 
-# Ejecutar con cobertura
+# Run with coverage
 python -m pytest tests/ -v --cov=src --cov-report=html
 ```
 
-### Tipos de Tests
+### Test Types
 
-| Tipo | Marcador | Descripción | Requiere DB |
-|------|----------|-------------|-------------|
-| Unitarios | `@pytest.mark.unit` | Pruebas aisladas de funciones | No |
-| Datos | `@pytest.mark.data` | Validación de datasets raw | No |
-| Integración | `@pytest.mark.integration` | Pruebas con base de datos | Sí |
+| Type | Marker | Description | Requires DB |
+|------|--------|-------------|-------------|
+| Unit | `@pytest.mark.unit` | Isolated function tests | No |
+| Data | `@pytest.mark.data` | Dataset validation | No |
+| Integration | `@pytest.mark.integration` | Database tests | Yes |
 
 ---
 
-## Consultas de Ejemplo
+## Example Queries
 
 ```sql
--- Total de afiliados por departamento
-SELECT d.nombre, SUM(f.num_personas) as total_afiliados
-FROM fact_afiliados f
-JOIN dim_municipio m ON f.sk_municipio = m.sk_municipio
-JOIN dim_departamento d ON m.sk_departamento = d.sk_departamento
-GROUP BY d.nombre
-ORDER BY total_afiliados DESC;
+-- Total affiliates by department
+SELECT d.name, SUM(f.num_personas) as total_affiliates
+FROM fact_affiliates f
+JOIN dim_municipality m ON f.sk_municipality = m.sk_municipality
+JOIN dim_department d ON m.sk_department = d.sk_department
+GROUP BY d.name
+ORDER BY total_affiliates DESC;
 
--- IPS por tipo de naturaleza
-SELECT i.naturaleza, COUNT(*) as total_ips
-FROM dim_ips i
-GROUP BY i.naturaleza;
+-- Facilities by nature type
+SELECT i.nature, COUNT(*) as total_facilities
+FROM dim_facility i
+GROUP BY i.nature;
 
--- Capacidad instalada por tipo
-SELECT tc.descripcion, SUM(c.cantidad_capacidad) as total_capacidad
-FROM fact_capacidad_ips c
-JOIN dim_tipo_capacidad tc ON c.sk_tipo_capacidad = tc.sk_tipo_capacidad
-GROUP BY tc.descripcion
-ORDER BY total_capacidad DESC;
+-- Installed capacity by type
+SELECT ct.description, SUM(c.capacity_amount) as total_capacity
+FROM fact_facility_capacity c
+JOIN dim_capacity_type ct ON c.sk_capacity_type = ct.sk_capacity_type
+GROUP BY ct.description
+ORDER BY total_capacity DESC;
 
--- Afiliados por régimen y año
-SELECT t.anio, r.descripcion, SUM(f.num_personas) as total
-FROM fact_afiliados f
-JOIN dim_tiempo t ON f.sk_tiempo = t.sk_tiempo
-JOIN dim_regimen r ON f.sk_regimen = r.sk_regimen
-GROUP BY t.anio, r.descripcion
-ORDER BY t.anio, r.descripcion;
+-- Affiliates by regime and year
+SELECT t.year, r.description, SUM(f.num_personas) as total
+FROM fact_affiliates f
+JOIN dim_time t ON f.sk_time = t.sk_time
+JOIN dim_regime r ON f.sk_regime = r.sk_regime
+GROUP BY t.year, r.description
+ORDER BY t.year, r.description;
 
--- Top 10 municipios con más afiliados
-SELECT m.nombre, d.nombre as departamento, SUM(f.num_personas) as total
-FROM fact_afiliados f
-JOIN dim_municipio m ON f.sk_municipio = m.sk_municipio
-JOIN dim_departamento d ON m.sk_departamento = d.sk_departamento
-GROUP BY m.nombre, d.nombre
+-- Top 10 municipalities with most affiliates
+SELECT m.name, d.name as department, SUM(f.num_personas) as total
+FROM fact_affiliates f
+JOIN dim_municipality m ON f.sk_municipality = m.sk_municipality
+JOIN dim_department d ON m.sk_department = d.sk_department
+GROUP BY m.name, d.name
 ORDER BY total DESC
 LIMIT 10;
 ```
 
 ---
 
-## Solución de Problemas
+## Troubleshooting
 
-| Problema | Solución |
-|----------|----------|
-| PostgreSQL no inicia | Verificar que el puerto 5432 no esté en uso: `sudo lsof -i :5432` |
-| Permission denied en volumes | Ejecutar: `sudo chown -R $USER:$USER ./data ./logs` |
-| Contenedor ETL falla | Verificar logs: `docker-compose logs etl` |
-| Power BI no conecta | Verificar que PostgreSQL esté corriendo: `docker-compose ps` |
-| No hay datos en tablas | Ejecutar ETL: `docker-compose run --rm etl` |
-| Jupyter no inicia | Verificar puerto: `sudo lsof -i :8888` |
+| Problem | Solution |
+|---------|----------|
+| PostgreSQL won't start | Check port 5432 isn't in use: `sudo lsof -i :5432` |
+| Permission denied on volumes | Run: `sudo chown -R $USER:$USER ./data ./logs` |
+| ETL container fails | Check logs: `docker-compose logs etl` |
+| Power BI won't connect | Verify PostgreSQL is running: `docker-compose ps` |
+| No data in tables | Run ETL: `docker-compose run --rm etl` |
+| Jupyter won't start | Check port: `sudo lsof -i :8888` |
 
 ---
 
-## Datos Fuente
+## Data Sources
 
-- **Afiliados**: SISPRO - Número de afiliados por departamento, municipio y régimen
-- **IPS**: REPS - Relación de IPS públicas y privadas según nivel de atención y capacidad instalada
+- **Affiliates**: SISPRO - Number of affiliates by department, municipality, and regime
+- **Facilities**: REPS - Public and private healthcare facilities by care level and installed capacity
 
-## Licencia
+## License
 
-Proyecto académico - Universidad EAFIT
-Curso: ETL y Análisis de Datos - 2026-2
+Academic project - Universidad EAFIT
+Course: ETL and Data Analysis - 2026-2
