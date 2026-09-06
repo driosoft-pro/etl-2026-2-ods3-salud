@@ -1,6 +1,6 @@
-# Análisis de Afiliados al Sistema de Salud en Colombia
+# Análisis de Salud en Colombia - Warehouse Dimensional
 
-Proyecto de análisis de datos sobre el número de afiliados por departamento, municipio y régimen de contribución en el sistema de salud colombiano.
+Proyecto ETL para el análisis de afiliados al sistema de salud y capacidad de IPS en Colombia. Utiliza Docker y PostgreSQL como data warehouse dimensional.
 
 ## Integrantes del Equipo
 
@@ -15,65 +15,118 @@ Proyecto de análisis de datos sobre el número de afiliados por departamento, m
 
 ```
 ├── data/
-│   ├── raw/                    # Datos originales sin procesar
-│   │   └── Numero_afiliados.csv
-│   └── processed/              # Datos procesados y transformados
-├── notebooks/                  # Jupyter notebooks para análisis
-├── src/                        # Código fuente de Python
+│   └── raw/                                    # Datos originales de SISPRO
+│       ├── Número_de_afiliados_por_departamento,_municipio_y_régimen_20260906.csv
+│       └── Relación_de_IPS_públicas_y_privadas_según_el_nivel_de_atención_y_capacidad_instalada_20260906.csv
+├── docs/
+│   └── ETL_2026-2_Project_FirstDelivery.pdf
+├── sql/
+│   └── init.sql                                # Esquema dimensional
+├── src/
 │   ├── __init__.py
-│   ├── extract.py              # Funciones de extracción
-│   ├── transform.py            # Funciones de transformación
-│   └── load.py                 # Funciones de carga
-├── docs/                       # Documentación del proyecto
-├── requirements.txt            # Dependencias del proyecto
-├── .gitignore                  # Archivos a ignorar por Git
-└── README.md                   # Este archivo
+│   ├── config.py                               # Configuración del proyecto
+│   ├── extract.py                              # Fase de extracción
+│   ├── transform.py                            # Fase de transformación
+│   ├── load.py                                 # Fase de carga
+│   └── etl_main.py                             # Orquestador principal
+├── notebooks/                                  # Jupyter notebooks
+├── logs/                                       # Logs del proceso ETL
+├── docker-compose.yml                          # Infraestructura Docker
+├── Dockerfile                                  # Imagen del proceso ETL
+├── requirements.txt                            # Dependencias Python
+├── .gitignore
+└── README.md
 ```
 
-## Datos
+## Esquema Dimensional
 
-El dataset contiene información sobre afiliados al sistema de salud colombiano con las siguientes columnas:
+### Modelo Star
 
-- **CodDepto**: Código del departamento
-- **Departamento**: Nombre del departamento
-- **CodMunicipio**: Código del municipio
-- **Municipio**: Nombre del municipio
-- **IDRegimen**: Régimen de afiliación (S=Subsidiado, E=Contributivo, C=Contributivo)
-- **Año**: Año de registro
-- **Mes**: Mes de registro
-- **NumPersonas**: Número de personas afiliadas
+**Tablas de Hechos:**
+- `fact_afiliados`: Número de personas afiliadas por municipio, régimen y tiempo
+- `fact_capacidad_ips`: Capacidad instalada por IPS y tipo de capacidad
 
-## Requisitos
+**Dimensiones:**
+- `dim_tiempo`: Año, mes, trimestre, semestre
+- `dim_departamento`: Código y nombre del departamento
+- `dim_municipio`: Código, nombre y departamento
+- `dim_regimen`: Código y descripción del régimen (Subsidado, Especial, Contributivo)
+- `dim_ips`: Datos de las Instituciones Prestadoras de Servicios
+- `dim_tipo_capacidad`: Grupo y descripción de capacidad (CAMAS, CAMILLAS, etc.)
 
-- Python 3.8+
-- pandas
-- numpy
-- jupyter
+## Infraestructura Docker
 
-## Instalación
+| Servicio | Puerto | Descripción |
+|----------|--------|-------------|
+| PostgreSQL | 5432 | Data Warehouse |
+| pgAdmin | 5050 | Interfaz web para BD |
+| ETL | - | Proceso de transformación |
+
+## Instalación y Ejecución
+
+### Requisitos Previos
+- Docker y Docker Compose instalados
+- Git
+
+### Pasos
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/username/etl-project.git
-cd etl-project
+# 1. Clonar el repositorio
+git clone https://github.com/username/salud-colombia-etl.git
+cd salud-colombia-etl
 
-# Crear entorno virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
+# 2. Levantar la infraestructura
+docker-compose up -d
 
-# Instalar dependencias
-pip install -r requirements.txt
+# 3. Verificar que PostgreSQL esté listo
+docker logs warehouse_salud
+
+# 4. Ejecutar el proceso ETL
+docker-compose run --rm etl
+
+# 5. Acceder a pgAdmin
+# Abrir http://localhost:5050
+# Email: admin@salud.com
+# Password: admin123
 ```
 
-## Uso
+### Conexión en pgAdmin
 
-Los notebooks de análisis se encuentran en la carpeta `notebooks/`. Ejecutar en orden:
+1. Registrar nuevo servidor en pgAdmin
+2. Host: `postgres`
+3. Port: `5432`
+4. Database: `salud_colombia`
+5. Username: `etl_user`
+6. Password: `etl_password_2026`
 
-1. `01_exploracion_datos.ipynb` - Exploración inicial del dataset
-2. `02_limpieza_transformacion.ipynb` - Limpieza y transformación
-3. `03_analisis.ipynb` - Análisis estadístico
-4. `04_visualizacion.ipynb` - Visualización de resultados
+## Consultas de Ejemplo
+
+```sql
+-- Total de afiliados por departamento
+SELECT d.nombre, SUM(f.num_personas) as total_afiliados
+FROM fact_afiliados f
+JOIN dim_municipio m ON f.sk_municipio = m.sk_municipio
+JOIN dim_departamento d ON m.sk_departamento = d.sk_departamento
+GROUP BY d.nombre
+ORDER BY total_afiliados DESC;
+
+-- IPS por tipo de naturaleza
+SELECT i.naturaleza, COUNT(*) as total_ips
+FROM dim_ips i
+GROUP BY i.naturaleza;
+
+-- Capacidad instalada por tipo
+SELECT tc.descripcion, SUM(c.cantidad_capacidad) as total_capacidad
+FROM fact_capacidad_ips c
+JOIN dim_tipo_capacidad tc ON c.sk_tipo_capacidad = tc.sk_tipo_capacidad
+GROUP BY tc.descripcion
+ORDER BY total_capacidad DESC;
+```
+
+## Datos Fuente
+
+- **Afiliados**: SISPRO - Número de afiliados por departamento, municipio y régimen
+- **IPS**: REPS - Relación de IPS públicas y privadas según nivel de atención y capacidad instalada
 
 ## Licencia
 

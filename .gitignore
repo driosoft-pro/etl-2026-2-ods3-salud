@@ -12,10 +12,8 @@ ENV/
 # Jupyter Notebook
 .ipynb_checkpoints/
 
-# Data files (keep structure, ignore large files)
-data/raw/*.csv
+# Data processed files (keep raw data)
 data/processed/*.csv
-!data/raw/.gitkeep
 !data/processed/.gitkeep
 
 # IDE

@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: warehouse_salud
+    environment:
+      POSTGRES_DB: salud_colombia
+      POSTGRES_USER: etl_user
+      POSTGRES_PASSWORD: etl_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etl_user -d salud_colombia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_salud
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@salud.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: etl_process
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: salud_colombia
+      DB_USER: etl_user
+      DB_PASSWORD: etl_password_2026
+
+volumes:
+  pgdata:
