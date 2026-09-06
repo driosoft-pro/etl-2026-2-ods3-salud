@@ -58,22 +58,62 @@ ETL project for analyzing healthcare system affiliates and facility capacity in 
 
 ### Star Model
 
-```
-                    ┌─────────────────┐
-                    │   dim_time      │
-                    └────────┬────────┘
-                             │
-┌─────────────────┐    ┌─────┴─────┐    ┌─────────────────┐
-│ dim_department  ├────┤fact_affiliates├──┤   dim_regime    │
-└────────┬────────┘    └─────┬─────┘    └─────────────────┘
-         │                   │
-┌────────┴────────┐          │          ┌─────────────────┐
-│ dim_municipality├──────────┴──────────┤ dim_facility    │
-└─────────────────┘                     └────────┬────────┘
-                                                 │
-                                        ┌────────┴────────┐
-                                        │dim_capacity_type│
-                                        └─────────────────┘
+``` mermaid
+erDiagram
+    dim_tiempo ||--o{ fact_afiliados : registra
+    dim_regimen ||--o{ fact_afiliados : clasifica
+    dim_municipio ||--o{ fact_afiliados : localiza
+    dim_departamento ||--o{ fact_afiliados : agrupa
+    dim_departamento ||--o{ dim_municipio : contiene
+    dim_ips ||--o{ fact_afiliados : atiende
+    dim_ips ||--o{ dim_tipo_capacidad : clasifica_por
+
+    fact_afiliados {
+        int fact_sk PK
+        int tiempo_sk FK
+        int departamento_sk FK
+        int municipio_sk FK
+        int regimen_sk FK
+        int ips_sk FK
+        int numero_afiliados
+    }
+
+    dim_tiempo {
+        int tiempo_sk PK
+        int anio
+        int trimestre
+    }
+
+    dim_departamento {
+        int departamento_sk PK
+        string cod_dane_depto
+        string departamento
+    }
+
+    dim_municipio {
+        int municipio_sk PK
+        int departamento_sk FK
+        string cod_dane_mpio
+        string municipio
+    }
+
+    dim_regimen {
+        int regimen_sk PK
+        string tipo_regimen
+    }
+
+    dim_ips {
+        int ips_sk PK
+        string codigo_habilitacion
+        string nombre_ips
+        int tipo_capacidad_sk FK
+    }
+
+    dim_tipo_capacidad {
+        int tipo_capacidad_sk PK
+        string nivel_complejidad
+        string naturaleza_juridica
+    }
 ```
 
 **Fact Tables:**
