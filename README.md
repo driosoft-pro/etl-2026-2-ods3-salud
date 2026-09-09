@@ -489,5 +489,5 @@ LIMIT 10;
 
 ## License
 
-Academic project - Universidad EAFIT
-Course: ETL and Data Analysis - 2026-2
+Academic project - Universidad Autónoma de Occidente
+Course: ETL - 2026-2
