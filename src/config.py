@@ -1,4 +1,6 @@
 import os
+import unicodedata
+import re
 
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -19,6 +21,75 @@ MONTHS = {
     1: 'January', 2: 'February', 3: 'March', 4: 'April',
     5: 'May', 6: 'June', 7: 'July', 8: 'August',
     9: 'September', 10: 'October', 11: 'November', 12: 'December'
+}
+
+def normalize_text(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    text = text.strip()
+    nfkd = unicodedata.normalize('NFKD', text)
+    without_accents = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    return without_accents.upper()
+
+DEPT_NORMALIZE = {
+    'ATLANTICO': 'ATLANTICO',
+    'BOLIVAR': 'BOLIVAR',
+    'BOYACA': 'BOYACA',
+    'CAQUETA': 'CAQUETA',
+    'CHOCO': 'CHOCO',
+    'CORDOBA': 'CORDOBA',
+    'GUAINIA': 'GUAINIA',
+    'NARINO': 'NARINO',
+    'QUINDIO': 'QUINDIO',
+    'VAUPES': 'VAUPES',
+    'SAN ANDRES': 'SAN ANDRES',
+    'SAN ANDRES Y PROVIDENCIA': 'SAN ANDRES',
+    'VALLE DEL CAUCA': 'VALLE DEL CAUCA',
+    'VALLE': 'VALLE DEL CAUCA',
+    'BOGOTA D.C.': 'BOGOTA D.C.',
+    'BOGOTA': 'BOGOTA D.C.',
+    'NO APLICA': None,
+}
+
+REGIME_MAP = {
+    'S': 'SUBSIDIZED',
+    'C': 'CONTRIBUTORY',
+    'E': 'SPECIAL',
+    'I': 'INDIVIDUAL',
+}
+
+DEPT_DANE_CODES = {
+    'ANTIOQUIA': '05',
+    'ATLANTICO': '08',
+    'BOGOTA D.C.': '11',
+    'BOLIVAR': '13',
+    'BOYACA': '15',
+    'CALDAS': '17',
+    'CAQUETA': '18',
+    'CASANARE': '19',
+    'CESAR': '20',
+    'CHOCO': '27',
+    'CORDOBA': '23',
+    'CUNDINAMARCA': '25',
+    'CHOCO': '27',
+    'GUAINIA': '44',
+    'HUILA': '41',
+    'LA GUAJIRA': '44',
+    'MAGDALENA': '47',
+    'META': '50',
+    'NARINO': '52',
+    'NORTE DE SANTANDER': '54',
+    'PUTUMAYO': '86',
+    'QUINDIO': '63',
+    'RISARALDA': '66',
+    'SANTANDER': '68',
+    'SUCRE': '70',
+    'TOLIMA': '73',
+    'VALLE DEL CAUCA': '76',
+    'VAUPES': '97',
+    'VICHADA': '99',
+    'SAN ANDRES': '88',
+    'ARAUCA': '81',
 }
 
 REGION_MAP = {
@@ -52,4 +123,5 @@ REGION_MAP = {
     'MAGDALENA': 'Caribe',
     'SUCRE': 'Caribe',
     'SAN ANDRES': 'Insular',
+    'BOGOTA D.C.': 'Andina',
 }
