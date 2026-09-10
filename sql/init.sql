@@ -1,12 +1,13 @@
 -- =====================================================
 -- DIMENSIONAL SCHEMA - HEALTH COLOMBIA
+-- ODS 3 - Salud y Bienestar / Meta 3.8
 -- =====================================================
 
 -- =====================================================
 -- DIMENSIONS
 -- =====================================================
 
--- Time Dimension
+-- Time Dimension (Trimestral)
 CREATE TABLE dim_time (
     sk_time SERIAL PRIMARY KEY,
     year INTEGER NOT NULL,
@@ -14,18 +15,29 @@ CREATE TABLE dim_time (
     month_name VARCHAR(20) NOT NULL,
     quarter INTEGER NOT NULL,
     semester INTEGER NOT NULL,
+    periodo_codigo VARCHAR(10) NOT NULL,
     full_date DATE NOT NULL,
-    UNIQUE(year, month)
+    UNIQUE(year, quarter)
 );
 
--- Department Dimension
+-- Geography Dimension (con region)
+CREATE TABLE dim_geografia (
+    sk_geografia SERIAL PRIMARY KEY,
+    codigo_dane_municipio VARCHAR(10) NOT NULL,
+    municipio VARCHAR(150) NOT NULL,
+    codigo_dane_depto VARCHAR(5) NOT NULL,
+    departamento VARCHAR(100) NOT NULL,
+    region VARCHAR(50) NOT NULL
+);
+
+-- Department Dimension (legacy, compatibilidad)
 CREATE TABLE dim_department (
     sk_department SERIAL PRIMARY KEY,
     code VARCHAR(5) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL
 );
 
--- Municipality Dimension
+-- Municipality Dimension (legacy, compatibilidad)
 CREATE TABLE dim_municipality (
     sk_municipality SERIAL PRIMARY KEY,
     code VARCHAR(10) NOT NULL UNIQUE,
@@ -40,7 +52,7 @@ CREATE TABLE dim_regime (
     description VARCHAR(100) NOT NULL
 );
 
--- Facility Dimension (Healthcare Institution)
+-- Facility Dimension (Healthcare Institution - IPS)
 CREATE TABLE dim_facility (
     sk_facility SERIAL PRIMARY KEY,
     provider_code VARCHAR(20) NOT NULL,
@@ -68,14 +80,15 @@ CREATE TABLE dim_capacity_type (
 -- FACT TABLES
 -- =====================================================
 
--- Fact: Affiliates by municipality, regime, and time
+-- Fact: Affiliates (granularidad: trimestre + municipio + regimen)
+-- Una fila = total acumulado de afiliados para un regimen, municipio, trimestre y anio
 CREATE TABLE fact_affiliates (
     sk_affiliate SERIAL PRIMARY KEY,
     sk_time INTEGER NOT NULL REFERENCES dim_time(sk_time),
-    sk_municipality INTEGER NOT NULL REFERENCES dim_municipality(sk_municipality),
+    sk_geografia INTEGER NOT NULL REFERENCES dim_geografia(sk_geografia),
     sk_regime INTEGER NOT NULL REFERENCES dim_regime(sk_regime),
-    num_persons BIGINT NOT NULL,
-    UNIQUE(sk_time, sk_municipality, sk_regime)
+    numero_afiliados BIGINT NOT NULL,
+    UNIQUE(sk_time, sk_geografia, sk_regime)
 );
 
 -- Fact: Facility capacity by facility and time
@@ -93,13 +106,15 @@ CREATE TABLE fact_facility_capacity (
 -- =====================================================
 
 CREATE INDEX idx_fact_affiliates_time ON fact_affiliates(sk_time);
-CREATE INDEX idx_fact_affiliates_municipality ON fact_affiliates(sk_municipality);
+CREATE INDEX idx_fact_affiliates_geografia ON fact_affiliates(sk_geografia);
 CREATE INDEX idx_fact_affiliates_regime ON fact_affiliates(sk_regime);
 
 CREATE INDEX idx_fact_capacity_time ON fact_facility_capacity(sk_time);
 CREATE INDEX idx_fact_capacity_facility ON fact_facility_capacity(sk_facility);
 CREATE INDEX idx_fact_capacity_type ON fact_facility_capacity(sk_capacity_type);
 
+CREATE INDEX idx_geografia_depto ON dim_geografia(codigo_dane_depto);
+CREATE INDEX idx_geografia_region ON dim_geografia(region);
 CREATE INDEX idx_municipality_department ON dim_municipality(sk_department);
 CREATE INDEX idx_facility_municipality ON dim_facility(sk_municipality);
 
@@ -108,22 +123,24 @@ CREATE INDEX idx_facility_municipality ON dim_facility(sk_municipality);
 -- =====================================================
 
 CREATE VIEW v_affiliates_summary AS
-SELECT 
-    d.name AS department,
-    m.name AS municipality,
+SELECT
+    g.departamento,
+    g.municipio,
+    g.region,
+    g.codigo_dane_depto,
+    g.codigo_dane_municipio,
     r.description AS regime,
     t.year,
-    t.month,
-    t.month_name,
-    f.num_persons
+    t.quarter,
+    t.periodo_codigo,
+    f.numero_afiliados
 FROM fact_affiliates f
 JOIN dim_time t ON f.sk_time = t.sk_time
-JOIN dim_municipality m ON f.sk_municipality = m.sk_municipality
-JOIN dim_department d ON m.sk_department = d.sk_department
+JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
 JOIN dim_regime r ON f.sk_regime = r.sk_regime;
 
 CREATE VIEW v_facility_summary AS
-SELECT 
+SELECT
     d.name AS department,
     m.name AS municipality,
     i.name AS facility,
