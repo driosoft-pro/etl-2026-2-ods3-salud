@@ -41,7 +41,7 @@ def run_etl():
         dim_department = build_dim_department(df_affiliates, df_facilities)
         dim_municipality = build_dim_municipality(df_affiliates, df_facilities, dim_department)
         dim_regime = build_dim_regime(df_affiliates)
-        dim_facility = build_dim_facility(df_facilities, dim_municipality)
+        dim_facility = build_dim_facility(df_facilities, dim_municipality, dim_department)
         dim_capacity_type = build_dim_capacity_type(df_facilities)
         
         logger.info("Building fact tables...")

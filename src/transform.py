@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
-from .config import MONTHS
+from .config import (
+    MONTHS, REGION_MAP, REGIME_MAP, DEPT_NORMALIZE,
+    DEPT_DANE_CODES, normalize_text
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,7 +17,18 @@ def clean_affiliates(df: pd.DataFrame) -> pd.DataFrame:
     df['year'] = df['year'].astype(int)
     df['month'] = df['month'].astype(int)
     
+    df['department'] = df['department'].apply(normalize_text)
+    df['municipality'] = df['municipality'].apply(normalize_text)
+    
+    df['department'] = df['department'].map(lambda x: DEPT_NORMALIZE.get(x, x))
+    df = df.dropna(subset=['department'])
+    
     df = df[df['num_persons'] > 0].copy()
+    
+    df['quarter'] = (df['month'] - 1) // 3 + 1
+    df['periodo_codigo'] = df.apply(lambda r: f"{r['year']}-Q{r['quarter']}", axis=1)
+    df['data_source'] = 'affiliates'
+    df['data_snapshot_date'] = pd.to_datetime(df['year'].astype(str) + '-' + df['month'].astype(str) + '-01')
     
     logger.info(f"Records after cleaning: {len(df)}")
     return df
@@ -27,7 +41,16 @@ def clean_facilities(df: pd.DataFrame) -> pd.DataFrame:
     
     df['nit'] = df['nit'].str.replace(',', '', regex=False)
     
+    df['department'] = df['department'].apply(normalize_text)
+    df['municipality'] = df['municipality'].apply(normalize_text)
+    
+    df['department'] = df['department'].map(lambda x: DEPT_NORMALIZE.get(x, x))
+    df = df.dropna(subset=['department'])
+    
     df = df.dropna(subset=['provider_code', 'provider_name'])
+    
+    df['data_source'] = 'facilities'
+    df['data_snapshot_date'] = pd.to_datetime('2022-11-01')
     
     logger.info(f"Records after cleaning: {len(df)}")
     return df
@@ -35,36 +58,37 @@ def clean_facilities(df: pd.DataFrame) -> pd.DataFrame:
 def build_dim_time(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building time dimension...")
     
-    months_aff = df_affiliates[['year', 'month']].drop_duplicates()
+    time_records = []
     
-    cutoff_date = df_facilities['cutoff_date'].dropna().unique()
-    months_fac = []
-    for cd in cutoff_date:
-        try:
-            parts = cd.replace('Fecha corte REPS:', '').strip().split()
-            month_map = {'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,
-                        'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12}
-            if len(parts) >= 3:
-                m = month_map.get(parts[0], 1)
-                y = int(parts[2])
-                months_fac.append({'year': y, 'month': m})
-        except:
-            pass
+    aff_periods = df_affiliates[['year', 'quarter']].drop_duplicates()
+    for _, row in aff_periods.iterrows():
+        time_records.append({
+            'year': int(row['year']),
+            'quarter': int(row['quarter']),
+            'data_source': 'affiliates'
+        })
     
-    df_months_fac = pd.DataFrame(months_fac) if months_fac else pd.DataFrame(columns=['year', 'month'])
-    dim_time = pd.concat([months_aff, df_months_fac]).drop_duplicates().reset_index(drop=True)
+    time_records.append({
+        'year': 2022,
+        'quarter': 4,
+        'data_source': 'facilities'
+    })
     
+    dim_time = pd.DataFrame(time_records).drop_duplicates(subset=['year', 'quarter']).reset_index(drop=True)
+    
+    quarter_month_map = {1: 1, 2: 4, 3: 7, 4: 10}
+    dim_time['month'] = dim_time['quarter'].map(quarter_month_map)
     dim_time['month_name'] = dim_time['month'].map(MONTHS)
-    dim_time['quarter'] = (dim_time['month'] - 1) // 3 + 1
-    dim_time['semester'] = np.where(dim_time['month'] <= 6, 1, 2)
+    dim_time['semester'] = np.where(dim_time['quarter'] <= 2, 1, 2)
     dim_time['periodo_codigo'] = dim_time.apply(
         lambda r: f"{int(r['year'])}-Q{int(r['quarter'])}", axis=1
     )
     dim_time['full_date'] = pd.to_datetime(
         dim_time['year'].astype(str) + '-' + dim_time['month'].astype(str) + '-01'
     )
+    dim_time = dim_time.drop(columns=['data_source'])
     
-    dim_time = dim_time.sort_values(['year', 'month']).reset_index(drop=True)
+    dim_time = dim_time.sort_values(['year', 'quarter']).reset_index(drop=True)
     dim_time['sk_time'] = dim_time.index + 1
     
     logger.info(f"Time dimension records: {len(dim_time)}")
@@ -78,12 +102,15 @@ def build_dim_geografia(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame
     geo_aff.columns = ['codigo_dane_municipio', 'municipio', 'codigo_dane_depto',
                         'departamento', 'region']
     
-    geo_fac = df_facilities[['department', 'municipality']].drop_duplicates()
-    geo_fac['codigo_dane_municipio'] = geo_fac['municipality'].apply(lambda x: str(hash(x))[:8])
-    geo_fac['codigo_dane_depto'] = geo_fac['department'].str[:2].str.zfill(2)
-    geo_fac['region'] = 'Sin Region'
-    geo_fac.columns = ['departamento', 'municipio', 'codigo_dane_municipio',
-                        'codigo_dane_depto', 'region']
+    dept_map = df_affiliates.drop_duplicates('department')[['department', 'department_code']].set_index('department')['department_code'].to_dict()
+    
+    geo_fac = df_facilities[['municipality', 'department']].drop_duplicates()
+    geo_fac['codigo_dane_depto'] = geo_fac['department'].map(dept_map)
+    geo_fac = geo_fac.dropna(subset=['codigo_dane_depto'])
+    geo_fac['codigo_dane_municipio'] = geo_fac.apply(
+        lambda r: f"{r['codigo_dane_depto']}{hash(r['municipality']) % 10000:04d}", axis=1
+    )
+    geo_fac['region'] = geo_fac['department'].map(REGION_MAP).fillna('Sin Region')
     geo_fac = geo_fac[['codigo_dane_municipio', 'municipio', 'codigo_dane_depto',
                         'departamento', 'region']]
     
@@ -99,14 +126,16 @@ def build_dim_geografia(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame
 def build_dim_department(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building department dimension...")
     
-    depts_aff = df_affiliates[['department_code', 'department']].drop_duplicates()
-    depts_aff.columns = ['code', 'name']
+    all_depts = set(df_affiliates['department'].unique()) | set(df_facilities['department'].unique())
     
-    depts_fac = df_facilities[['department']].drop_duplicates()
-    depts_fac['code'] = depts_fac['name'].str[:2].str.zfill(2)
-    depts_fac = depts_fac[['code', 'name']]
+    rows = []
+    for dept in sorted(all_depts):
+        code = DEPT_DANE_CODES.get(dept, df_affiliates[df_affiliates['department'] == dept]['department_code'].iloc[0]
+                                   if dept in df_affiliates['department'].values else None)
+        if code:
+            rows.append({'code': code, 'name': dept})
     
-    dim_dept = pd.concat([depts_aff, depts_fac]).drop_duplicates(subset=['name']).reset_index(drop=True)
+    dim_dept = pd.DataFrame(rows).drop_duplicates(subset=['code']).reset_index(drop=True)
     dim_dept['sk_department'] = dim_dept.index + 1
     
     logger.info(f"Department dimension records: {len(dim_dept)}")
@@ -119,19 +148,12 @@ def build_dim_municipality(df_affiliates: pd.DataFrame, df_facilities: pd.DataFr
     mun_aff = df_affiliates[['municipality_code', 'municipality', 'department']].drop_duplicates()
     mun_aff.columns = ['code', 'name', 'dept_name']
     
-    mun_fac = df_facilities[['municipality', 'department']].drop_duplicates()
-    mun_fac['code'] = mun_fac['name'].apply(lambda x: str(hash(x))[:8])
-    mun_fac.columns = ['name', 'dept_name', 'code']
-    mun_fac = mun_fac[['code', 'name', 'dept_name']]
+    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
+    mun_aff['sk_department'] = mun_aff['dept_name'].map(dept_to_sk)
+    mun_aff = mun_aff.drop(columns=['dept_name']).dropna(subset=['sk_department'])
+    mun_aff['sk_department'] = mun_aff['sk_department'].astype(int)
     
-    dim_mun = pd.concat([mun_aff, mun_fac]).drop_duplicates(subset=['name', 'dept_name']).reset_index(drop=True)
-    
-    dept_map = dim_dept.set_index('name')['sk_department'].to_dict()
-    dim_mun['sk_department'] = dim_mun['dept_name'].map(dept_map)
-    dim_mun = dim_mun.dropna(subset=['sk_department'])
-    dim_mun['sk_department'] = dim_mun['sk_department'].astype(int)
-    
-    dim_mun = dim_mun.drop(columns=['dept_name'])
+    dim_mun = mun_aff.drop_duplicates(subset=['code']).reset_index(drop=True)
     dim_mun['sk_municipality'] = dim_mun.index + 1
     
     logger.info(f"Municipality dimension records: {len(dim_mun)}")
@@ -140,37 +162,36 @@ def build_dim_municipality(df_affiliates: pd.DataFrame, df_facilities: pd.DataFr
 def build_dim_regime(df_affiliates: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building regime dimension...")
     
-    regime_map = {
-        'S': 'SUBSIDIZED',
-        'E': 'SPECIAL',
-        'C': 'CONTRIBUTORY'
-    }
-    
     dim_reg = df_affiliates[['regime_id']].drop_duplicates().reset_index(drop=True)
     dim_reg.columns = ['code']
-    dim_reg['description'] = dim_reg['code'].map(regime_map).fillna('UNKNOWN')
+    dim_reg['description'] = dim_reg['code'].map(REGIME_MAP).fillna('UNKNOWN')
     dim_reg['sk_regime'] = dim_reg.index + 1
     
     logger.info(f"Regime dimension records: {len(dim_reg)}")
     return dim_reg
 
-def build_dim_facility(df_facilities: pd.DataFrame, dim_mun: pd.DataFrame) -> pd.DataFrame:
+def build_dim_facility(df_facilities: pd.DataFrame, dim_mun: pd.DataFrame,
+                       dim_dept: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building facility dimension...")
     
     dim_fac = df_facilities[['provider_code', 'provider_name', 'nit', 'nature',
                               'care_level', 'manager', 'address', 'email', 
-                              'phone', 'municipality']].drop_duplicates().reset_index(drop=True)
+                              'phone', 'municipality', 'department']].drop_duplicates().reset_index(drop=True)
     
     dim_fac.columns = ['provider_code', 'name', 'nit', 'nature',
                         'care_level', 'manager', 'address', 'email',
-                        'phone', 'municipality_name']
+                        'phone', 'municipality_name', 'dept_name']
     
-    mun_map = dim_mun.set_index('name')['sk_municipality'].to_dict()
-    dim_fac['sk_municipality'] = dim_fac['municipality_name'].map(mun_map)
+    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
+    fac_muni_map = dim_mun.set_index(['name', 'sk_department'])['sk_municipality'].to_dict()
+    
+    dim_fac['sk_municipality'] = dim_fac.apply(
+        lambda r: fac_muni_map.get((r['municipality_name'], dept_to_sk.get(r['dept_name']))), axis=1
+    )
     dim_fac = dim_fac.dropna(subset=['sk_municipality'])
     dim_fac['sk_municipality'] = dim_fac['sk_municipality'].astype(int)
     
-    dim_fac = dim_fac.drop(columns=['municipality_name'])
+    dim_fac = dim_fac.drop(columns=['municipality_name', 'dept_name'])
     dim_fac['sk_facility'] = dim_fac.index + 1
     
     logger.info(f"Facility dimension records: {len(dim_fac)}")
@@ -219,24 +240,23 @@ def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataF
                                   dim_fac: pd.DataFrame, dim_ct: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building facility capacity fact table...")
     
-    time_map = dim_time.set_index(['year', 'month'])['sk_time'].to_dict()
+    time_key = (2022, 4)
+    sk_time_val = dim_time.set_index(['year', 'quarter']).loc[time_key, 'sk_time']
+    if isinstance(sk_time_val, pd.Series):
+        sk_time_val = sk_time_val.iloc[0]
     
-    df_fac_temp = df_facilities.copy()
-    df_fac_temp['year'] = 2022
-    df_fac_temp['month'] = 11
+    fact = df_facilities[['provider_code', 'capacity_group', 'capacity_description',
+                           'installed_capacity']].copy()
     
-    fact = df_fac_temp[['provider_code', 'municipality', 'capacity_group', 'capacity_description',
-                         'installed_capacity', 'year', 'month']].copy()
-    
-    fact['sk_time'] = fact.apply(lambda r: time_map.get((r['year'], r['month'])), axis=1)
-    
-    fac_key = dim_fac.set_index(['provider_code'])['sk_facility'].to_dict()
+    fac_key = dim_fac.set_index('provider_code')['sk_facility'].to_dict()
     fact['sk_facility'] = fact['provider_code'].map(fac_key)
     
     ct_key = dim_ct.set_index(['group', 'description'])['sk_capacity_type'].to_dict()
     fact['sk_capacity_type'] = fact.apply(
         lambda r: ct_key.get((r['capacity_group'], r['capacity_description'])), axis=1
     )
+    
+    fact['sk_time'] = sk_time_val
     
     fact = fact.dropna(subset=['sk_time', 'sk_facility', 'sk_capacity_type'])
     fact['sk_time'] = fact['sk_time'].astype(int)
