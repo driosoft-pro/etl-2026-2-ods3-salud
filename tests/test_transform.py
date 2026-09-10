@@ -199,16 +199,10 @@ class TestDimFacility:
     @pytest.fixture(autouse=True)
     def setup(self, raw_data):
         self.df_fac = clean_facilities(raw_data['facilities'])
-        self.dim_dept = build_dim_department(
-            clean_affiliates(raw_data['affiliates']), 
-            self.df_fac
-        )
-        self.dim_mun = build_dim_municipality(
-            clean_affiliates(raw_data['affiliates']),
-            self.df_fac,
-            self.dim_dept
-        )
-        self.dim = build_dim_facility(self.df_fac, self.dim_mun)
+        self.df_aff = clean_affiliates(raw_data['affiliates'])
+        self.dim_dept = build_dim_department(self.df_aff, self.df_fac)
+        self.dim_mun = build_dim_municipality(self.df_aff, self.df_fac, self.dim_dept)
+        self.dim = build_dim_facility(self.df_fac, self.dim_mun, self.dim_dept)
     
     def test_is_dataframe(self):
         assert isinstance(self.dim, pd.DataFrame)
@@ -218,6 +212,10 @@ class TestDimFacility:
     
     def test_has_fk_municipality(self):
         assert 'sk_municipality' in self.dim.columns
+    
+    def test_valid_fk_municipality(self):
+        valid_mun = set(self.dim_mun['sk_municipality'])
+        assert self.dim['sk_municipality'].isin(valid_mun).all(), "Invalid FK in sk_municipality"
 
 
 @pytest.mark.unit

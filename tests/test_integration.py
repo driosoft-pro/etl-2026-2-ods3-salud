@@ -28,7 +28,7 @@ class TestFullIntegration:
         self.dim_dept = build_dim_department(self.df_aff, self.df_fac)
         self.dim_mun = build_dim_municipality(self.df_aff, self.df_fac, self.dim_dept)
         self.dim_reg = build_dim_regime(self.df_aff)
-        self.dim_fac = build_dim_facility(self.df_fac, self.dim_mun)
+        self.dim_fac = build_dim_facility(self.df_fac, self.dim_mun, self.dim_dept)
         self.dim_ct = build_dim_capacity_type(self.df_fac)
         
         self.fact_aff = build_fact_affiliates(self.df_aff, self.dim_time, self.dim_geo, self.dim_reg)
