@@ -57,6 +57,9 @@ def build_dim_time(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> 
     dim_time['month_name'] = dim_time['month'].map(MONTHS)
     dim_time['quarter'] = (dim_time['month'] - 1) // 3 + 1
     dim_time['semester'] = np.where(dim_time['month'] <= 6, 1, 2)
+    dim_time['periodo_codigo'] = dim_time.apply(
+        lambda r: f"{int(r['year'])}-Q{int(r['quarter'])}", axis=1
+    )
     dim_time['full_date'] = pd.to_datetime(
         dim_time['year'].astype(str) + '-' + dim_time['month'].astype(str) + '-01'
     )
@@ -66,6 +69,32 @@ def build_dim_time(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> 
     
     logger.info(f"Time dimension records: {len(dim_time)}")
     return dim_time
+
+def build_dim_geografia(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Building geography dimension...")
+    
+    geo_aff = df_affiliates[['municipality_code', 'municipality', 'department_code',
+                              'department', 'region']].drop_duplicates()
+    geo_aff.columns = ['codigo_dane_municipio', 'municipio', 'codigo_dane_depto',
+                        'departamento', 'region']
+    
+    geo_fac = df_facilities[['department', 'municipality']].drop_duplicates()
+    geo_fac['codigo_dane_municipio'] = geo_fac['municipality'].apply(lambda x: str(hash(x))[:8])
+    geo_fac['codigo_dane_depto'] = geo_fac['department'].str[:2].str.zfill(2)
+    geo_fac['region'] = 'Sin Region'
+    geo_fac.columns = ['departamento', 'municipio', 'codigo_dane_municipio',
+                        'codigo_dane_depto', 'region']
+    geo_fac = geo_fac[['codigo_dane_municipio', 'municipio', 'codigo_dane_depto',
+                        'departamento', 'region']]
+    
+    dim_geo = pd.concat([geo_aff, geo_fac]).drop_duplicates(
+        subset=['codigo_dane_municipio']
+    ).reset_index(drop=True)
+    
+    dim_geo['sk_geografia'] = dim_geo.index + 1
+    
+    logger.info(f"Geography dimension records: {len(dim_geo)}")
+    return dim_geo
 
 def build_dim_department(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building department dimension...")
@@ -158,28 +187,33 @@ def build_dim_capacity_type(df_facilities: pd.DataFrame) -> pd.DataFrame:
     return dim_ct
 
 def build_fact_affiliates(df_affiliates: pd.DataFrame, dim_time: pd.DataFrame,
-                          dim_mun: pd.DataFrame, dim_reg: pd.DataFrame) -> pd.DataFrame:
-    logger.info("Building affiliates fact table...")
+                          dim_geo: pd.DataFrame, dim_reg: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Building affiliates fact table (quarterly granularity)...")
     
-    time_map = dim_time.set_index(['year', 'month'])['sk_time'].to_dict()
-    mun_map = dim_mun.set_index('code')['sk_municipality'].to_dict()
+    time_map = dim_time.set_index(['year', 'quarter'])['sk_time'].to_dict()
+    geo_map = dim_geo.set_index('codigo_dane_municipio')['sk_geografia'].to_dict()
     reg_map = dim_reg.set_index('code')['sk_regime'].to_dict()
     
     fact = df_affiliates.copy()
-    fact['sk_time'] = fact.apply(lambda r: time_map.get((r['year'], r['month'])), axis=1)
-    fact['sk_municipality'] = fact['municipality_code'].map(mun_map)
+    fact['quarter'] = (fact['month'] - 1) // 3 + 1
+    
+    fact['sk_time'] = fact.apply(lambda r: time_map.get((r['year'], r['quarter'])), axis=1)
+    fact['sk_geografia'] = fact['municipality_code'].map(geo_map)
     fact['sk_regime'] = fact['regime_id'].map(reg_map)
     
-    fact = fact.dropna(subset=['sk_time', 'sk_municipality', 'sk_regime'])
+    fact = fact.dropna(subset=['sk_time', 'sk_geografia', 'sk_regime'])
     fact['sk_time'] = fact['sk_time'].astype(int)
-    fact['sk_municipality'] = fact['sk_municipality'].astype(int)
+    fact['sk_geografia'] = fact['sk_geografia'].astype(int)
     fact['sk_regime'] = fact['sk_regime'].astype(int)
     
-    fact = fact[['sk_time', 'sk_municipality', 'sk_regime', 'num_persons']]
-    fact['sk_affiliate'] = fact.index + 1
+    fact_agg = fact.groupby(['sk_time', 'sk_geografia', 'sk_regime']).agg(
+        numero_afiliados=('num_persons', 'sum')
+    ).reset_index()
     
-    logger.info(f"Affiliates fact records: {len(fact)}")
-    return fact
+    fact_agg['sk_affiliate'] = fact_agg.index + 1
+    
+    logger.info(f"Affiliates fact records (quarterly): {len(fact_agg)}")
+    return fact_agg
 
 def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataFrame,
                                   dim_fac: pd.DataFrame, dim_ct: pd.DataFrame) -> pd.DataFrame:

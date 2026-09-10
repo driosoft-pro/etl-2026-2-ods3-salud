@@ -3,10 +3,11 @@ import sys
 from .extract import extract_all
 from .transform import (
     clean_affiliates, clean_facilities,
-    build_dim_time, build_dim_department, build_dim_municipality,
+    build_dim_time, build_dim_geografia, build_dim_department, build_dim_municipality,
     build_dim_regime, build_dim_facility, build_dim_capacity_type,
     build_fact_affiliates, build_fact_facility_capacity
 )
+from .validate import run_all_validations
 from .load import load_all
 
 logging.basicConfig(
@@ -32,8 +33,11 @@ def run_etl():
         df_affiliates = clean_affiliates(raw_data['affiliates'])
         df_facilities = clean_facilities(raw_data['facilities'])
         
+        original_total = df_affiliates['num_persons'].sum()
+        
         logger.info("Building dimensions...")
         dim_time = build_dim_time(df_affiliates, df_facilities)
+        dim_geografia = build_dim_geografia(df_affiliates, df_facilities)
         dim_department = build_dim_department(df_affiliates, df_facilities)
         dim_municipality = build_dim_municipality(df_affiliates, df_facilities, dim_department)
         dim_regime = build_dim_regime(df_affiliates)
@@ -41,11 +45,22 @@ def run_etl():
         dim_capacity_type = build_dim_capacity_type(df_facilities)
         
         logger.info("Building fact tables...")
-        fact_affiliates = build_fact_affiliates(df_affiliates, dim_time, dim_municipality, dim_regime)
+        fact_affiliates = build_fact_affiliates(df_affiliates, dim_time, dim_geografia, dim_regime)
         fact_capacity = build_fact_facility_capacity(df_facilities, dim_time, dim_facility, dim_capacity_type)
+        
+        logger.info("PHASE 2.5: VALIDATION")
+        validations = run_all_validations(
+            fact_affiliates, fact_capacity,
+            dim_time, dim_geografia, dim_regime, dim_facility, dim_capacity_type,
+            original_total=original_total
+        )
+        total_errors = sum(len(v) for v in validations.values())
+        if total_errors > 0:
+            logger.warning(f"Validation found {total_errors} issues (check logs)")
         
         dimensions = {
             'time': dim_time,
+            'geografia': dim_geografia,
             'department': dim_department,
             'municipality': dim_municipality,
             'regime': dim_regime,
@@ -67,13 +82,15 @@ def run_etl():
         
         print("\n LOAD SUMMARY:")
         print(f"   dim_time:          {len(dim_time)} records")
+        print(f"   dim_geografia:     {len(dim_geografia)} records")
         print(f"   dim_department:    {len(dim_department)} records")
         print(f"   dim_municipality:  {len(dim_municipality)} records")
         print(f"   dim_regime:        {len(dim_regime)} records")
         print(f"   dim_facility:      {len(dim_facility)} records")
         print(f"   dim_capacity_type: {len(dim_capacity_type)} records")
-        print(f"   fact_affiliates:   {len(fact_affiliates)} records")
+        print(f"   fact_affiliates:   {len(fact_affiliates)} records (quarterly)")
         print(f"   fact_capacity:     {len(fact_capacity)} records")
+        print(f"   validations:       {total_errors} errors")
         
     except Exception as e:
         logger.error(f"ETL process error: {e}")

@@ -1,5 +1,5 @@
 import pandas as pd
-from .config import DATA_DIR, DATASETS
+from .config import DATA_DIR, DATASETS, REGION_MAP
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,6 +10,7 @@ def extract_affiliates() -> pd.DataFrame:
     df = pd.read_csv(path, dtype=str)
     df.columns = ['department_code', 'department', 'municipality_code', 'municipality',
                    'regime_id', 'year', 'month', 'num_persons']
+    df['region'] = df['department'].str.upper().map(REGION_MAP).fillna('Sin Region')
     logger.info(f"Records extracted: {len(df)}")
     return df
 
