@@ -87,9 +87,40 @@ This project addresses this problem by building a dimensional data warehouse tha
 
 ### Fact Table Granularity
 
-> **A row in the affiliates fact table represents the total accumulated affiliates for a specific health regime, in a given municipality, during a specific quarter and year.**
+> **A row in `fact_affiliates` represents the total accumulated affiliates for a specific health regime, in a given municipality, during a specific quarter and year.**
 
-This quarterly granularity enables temporal analysis of enrollment trends (R2, R4) while maintaining the geographic and regime breakdowns needed for territorial comparisons (R1, R3, R5).
+> **A row in `fact_facility_capacity` represents the installed capacity (beds, rooms) for a specific healthcare facility and capacity type, at a point-in-time snapshot.**
+
+### Why Two Fact Tables?
+
+The project uses **two fact tables** because they measure fundamentally different business processes with different granularities and additive properties:
+
+| Aspect | `fact_affiliates` | `fact_facility_capacity` |
+|--------|-------------------|--------------------------|
+| **Business process** | Health insurance enrollment | Hospital infrastructure capacity |
+| **Grain** | Municipality + Regime + Quarter | Facility + Capacity Type + Snapshot |
+| **Additivity** | Additive across time (can sum quarters) | Non-additive (snapshot, not accumulable) |
+| **Measures** | `numero_afiliados` (people) | `capacidad_instalada` (beds/rooms) |
+| **Temporal behavior** | Changes monthly (enrollment flux) | Static snapshot (infrastructure changes slowly) |
+| **Analytical use** | R1-R5: enrollment trends, regime comparison | Cross-analysis: beds per 1,000 affiliates |
+
+Merging these into one fact table would violate dimensional modeling principles because the measures are not additive across the same dimensions, and the business processes are independent.
+
+### Temporal Quarantine
+
+The two source datasets have **different temporal coverage**:
+
+- **Affiliates (SISPRO)**: Snapshot from **April 2022** (Q2 2022)
+- **Facilities (REPS)**: Snapshot from **November 2022** (Q4 2022)
+
+Since the data covers different months within the same year, direct temporal comparisons between affiliates and facilities are **not valid**. The ETL implements a **quarantine approach**:
+
+1. `fact_affiliates` stores data for Q2 2022 (April)
+2. `fact_facility_capacity` stores data for Q4 2022 (November)
+3. Cross-dataset analytical queries (beds per affiliate) use **both snapshots** with an explicit note that they represent different points in time
+4. Temporal trend analysis (R2, R4) is limited to `fact_affiliates` only
+
+This quarantine ensures that users understand the temporal mismatch and do not draw incorrect conclusions from comparing Q2 enrollment with Q4 infrastructure data.
 
 ### Star Model
 
@@ -99,6 +130,7 @@ erDiagram
     dim_regimen ||--o{ fact_afiliados : clasifica
     dim_geografia ||--o{ fact_afiliados : localiza
     dim_geografia ||--o{ dim_municipio : contiene
+    dim_tiempo ||--o{ fact_capacidad : registra
     dim_ips ||--o{ fact_capacidad : atiende
     dim_tipo_capacidad ||--o{ fact_capacidad : clasifica
 
@@ -136,9 +168,9 @@ erDiagram
 
     dim_municipio {
         int sk_municipio PK
-        int sk_geografia FK
         string codigo_dane
         string nombre
+        int sk_department FK
     }
 
     dim_regimen {
@@ -163,17 +195,22 @@ erDiagram
     }
 ```
 
-**Fact Tables:**
-- `fact_afiliates`: Accumulated affiliates per regime, municipality, and quarter/year
-- `fact_facility_capacity`: Installed capacity per facility, capacity type, and time
-
 **Dimensions:**
-- `dim_tiempo` (Time): Year, quarter, period code (e.g. 2024-Q1)
-- `dim_geografia` (Geography): Municipality code/name, department code/name, geographic region (Amazonia, Orinoquia, Pacific, Andina, Caribe, Insular)
-- `dim_municipio` (Municipality): Detailed municipality linked to geography
-- `dim_regimen` (Regime): Code and description (Contributivo, Subsidiado, Excepción/Especial)
+- `dim_tiempo` (Time): Year, quarter, period code (e.g. 2022-Q2)
+- `dim_geografia` (Geography): Municipality code/name, department code/name, geographic region (Amazonia, Orinoquia, Pacifico, Andina, Caribe, Insular)
+- `dim_municipio` (Municipality): Detailed municipality linked to department
+- `dim_regimen` (Regime): Code and description (Contributivo, Subsidiado, Especial, Individual)
 - `dim_ips` (Healthcare Facility): Provider data linked to municipality
 - `dim_tipo_capacidad` (Capacity Type): Group and description (CAMAS, SALAS, etc.)
+
+### Text Normalization
+
+All department and municipality names are normalized to prevent duplicates across datasets:
+1. **Accent stripping**: `Boyacá` → `BOYACA`
+2. **Case unification**: `Atlántico` → `ATLANTICO`
+3. **Name harmonization**: `Valle del cauca` → `VALLE DEL CAUCA`
+4. **Invalid data filtering**: `NO APLICA` department rows are removed
+5. **DANE codes**: Standardized from affiliate data (33 departments + Bogotá D.C.)
 
 ## Docker Infrastructure
 

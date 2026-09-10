@@ -1,6 +1,14 @@
 -- =====================================================
 -- DIMENSIONAL SCHEMA - HEALTH COLOMBIA
 -- ODS 3 - Salud y Bienestar / Meta 3.8
+--
+-- Two fact tables with different granularities:
+--   fact_affiliates: enrollment by municipality/regime/quarter (Q2 2022 snapshot)
+--   fact_facility_capacity: infrastructure by facility/type (Q4 2022 snapshot)
+--
+-- Temporal quarantine: datasets from different months cannot be
+-- directly compared in temporal analysis. Cross-dataset queries
+-- (beds per affiliate) use both snapshots with explicit caveats.
 -- =====================================================
 
 -- =====================================================
@@ -30,14 +38,14 @@ CREATE TABLE dim_geografia (
     region VARCHAR(50) NOT NULL
 );
 
--- Department Dimension (legacy, compatibilidad)
+-- Department Dimension (used by facility path: IPS -> municipality -> department)
 CREATE TABLE dim_department (
     sk_department SERIAL PRIMARY KEY,
     code VARCHAR(5) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL
 );
 
--- Municipality Dimension (legacy, compatibilidad)
+-- Municipality Dimension (used by facility path: IPS -> municipality)
 CREATE TABLE dim_municipality (
     sk_municipality SERIAL PRIMARY KEY,
     code VARCHAR(10) NOT NULL UNIQUE,
@@ -80,8 +88,9 @@ CREATE TABLE dim_capacity_type (
 -- FACT TABLES
 -- =====================================================
 
--- Fact: Affiliates (granularidad: trimestre + municipio + regimen)
--- Una fila = total acumulado de afiliados para un regimen, municipio, trimestre y anio
+-- Fact: Affiliates (grain: quarter + municipality + regime)
+-- Row = total accumulated affiliates for a regime, municipality, quarter and year
+-- Data snapshot: April 2022 (Q2 2022)
 CREATE TABLE fact_affiliates (
     sk_affiliate SERIAL PRIMARY KEY,
     sk_time INTEGER NOT NULL REFERENCES dim_time(sk_time),
@@ -91,7 +100,10 @@ CREATE TABLE fact_affiliates (
     UNIQUE(sk_time, sk_geografia, sk_regime)
 );
 
--- Fact: Facility capacity by facility and time
+-- Fact: Facility capacity (grain: facility + capacity type + snapshot)
+-- Row = installed capacity for a facility and capacity type at a point in time
+-- Data snapshot: November 2022 (Q4 2022)
+-- NOT additive across time (infrastructure is a stock, not a flow)
 CREATE TABLE fact_facility_capacity (
     sk_capacity SERIAL PRIMARY KEY,
     sk_time INTEGER NOT NULL REFERENCES dim_time(sk_time),
