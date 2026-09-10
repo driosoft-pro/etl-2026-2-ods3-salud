@@ -14,7 +14,7 @@ class TestFullIntegration:
         from src.extract import extract_all
         from src.transform import (
             clean_affiliates, clean_facilities,
-            build_dim_time, build_dim_department, build_dim_municipality,
+            build_dim_time, build_dim_geografia, build_dim_department, build_dim_municipality,
             build_dim_regime, build_dim_facility, build_dim_capacity_type,
             build_fact_affiliates, build_fact_facility_capacity
         )
@@ -24,17 +24,19 @@ class TestFullIntegration:
         self.df_fac = clean_facilities(self.raw['facilities'])
         
         self.dim_time = build_dim_time(self.df_aff, self.df_fac)
+        self.dim_geo = build_dim_geografia(self.df_aff, self.df_fac)
         self.dim_dept = build_dim_department(self.df_aff, self.df_fac)
         self.dim_mun = build_dim_municipality(self.df_aff, self.df_fac, self.dim_dept)
         self.dim_reg = build_dim_regime(self.df_aff)
         self.dim_fac = build_dim_facility(self.df_fac, self.dim_mun)
         self.dim_ct = build_dim_capacity_type(self.df_fac)
         
-        self.fact_aff = build_fact_affiliates(self.df_aff, self.dim_time, self.dim_mun, self.dim_reg)
+        self.fact_aff = build_fact_affiliates(self.df_aff, self.dim_time, self.dim_geo, self.dim_reg)
         self.fact_cap = build_fact_facility_capacity(self.df_fac, self.dim_time, self.dim_fac, self.dim_ct)
     
     def test_all_dimensions(self):
         assert len(self.dim_time) > 0
+        assert len(self.dim_geo) > 0
         assert len(self.dim_dept) > 0
         assert len(self.dim_mun) > 0
         assert len(self.dim_reg) > 0
@@ -49,9 +51,12 @@ class TestFullIntegration:
         valid_sk_time = set(self.dim_time['sk_time'])
         assert self.fact_aff['sk_time'].isin(valid_sk_time).all()
         assert self.fact_cap['sk_time'].isin(valid_sk_time).all()
+        valid_sk_geo = set(self.dim_geo['sk_geografia'])
+        assert self.fact_aff['sk_geografia'].isin(valid_sk_geo).all()
     
     def test_no_duplicates_in_dimensions(self):
         assert self.dim_time['sk_time'].is_unique
+        assert self.dim_geo['sk_geografia'].is_unique
         assert self.dim_dept['sk_department'].is_unique
         assert self.dim_mun['sk_municipality'].is_unique
         assert self.dim_reg['sk_regime'].is_unique

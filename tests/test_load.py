@@ -63,7 +63,7 @@ class TestDBConnection:
             conn.close()
             
             expected_tables = {
-                'dim_time', 'dim_department', 'dim_municipality',
+                'dim_time', 'dim_geografia', 'dim_department', 'dim_municipality',
                 'dim_regime', 'dim_facility', 'dim_capacity_type',
                 'fact_affiliates', 'fact_facility_capacity'
             }
