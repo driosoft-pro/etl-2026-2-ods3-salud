@@ -59,6 +59,7 @@ def load_all(dimensions: dict, facts: dict):
         load_dimension(conn, 'dim_department', dimensions['department'], 'sk_department')
         load_dimension(conn, 'dim_municipality', dimensions['municipality'], 'sk_municipality')
         load_dimension(conn, 'dim_regime', dimensions['regime'], 'sk_regime')
+        load_dimension(conn, 'dim_geografia', dimensions['geografia'], 'sk_geografia')
         load_dimension(conn, 'dim_facility', dimensions['facility'], 'sk_facility')
         load_dimension(conn, 'dim_capacity_type', dimensions['capacity_type'], 'sk_capacity_type')
         

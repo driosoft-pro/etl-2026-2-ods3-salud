@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 echo "=========================================="
 echo "  TEST EXECUTION - HEALTH COLOMBIA"
