@@ -111,8 +111,10 @@ def build_dim_geografia(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame
         lambda r: f"{r['codigo_dane_depto']}{hash(r['municipality']) % 10000:04d}", axis=1
     )
     geo_fac['region'] = geo_fac['department'].map(REGION_MAP).fillna('Sin Region')
-    geo_fac = geo_fac[['codigo_dane_municipio', 'municipio', 'codigo_dane_depto',
-                        'departamento', 'region']]
+    geo_fac = geo_fac[['codigo_dane_municipio', 'municipality', 'codigo_dane_depto',
+                        'department', 'region']]
+    geo_fac.columns = ['codigo_dane_municipio', 'municipio', 'codigo_dane_depto',
+                        'departamento', 'region']
     
     dim_geo = pd.concat([geo_aff, geo_fac]).drop_duplicates(
         subset=['codigo_dane_municipio']
