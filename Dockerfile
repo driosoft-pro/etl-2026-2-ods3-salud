@@ -7,4 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
 
+RUN mkdir -p /app/logs
+
 CMD ["python", "-m", "src.etl_main"]

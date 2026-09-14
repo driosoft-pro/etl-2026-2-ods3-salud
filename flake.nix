@@ -42,6 +42,7 @@
           pkgs.uv
           pkgs.postgresql_16
           pkgs.docker-compose
+          pkgs.podman-compose
           pkgs.stdenv.cc.cc.lib
           pkgs.zlib
         ];
@@ -66,13 +67,13 @@
           echo "psql:    $(psql --version | head -1)"
           echo ""
           echo "Comandos:"
-          echo "  docker-compose up -d       Levantar infraestructura"
+          echo "  docker-compose up -d        Levantar infraestructura (Docker)"
+          echo "  podman-compose up -d        Levantar infraestructura (Podman)"
           echo "  docker-compose run --rm etl Ejecutar pipeline ETL"
-          echo "  ./run_tests.sh unit        Ejecutar tests unitarios"
-          echo "  ./run_tests.sh all         Ejecutar todos los tests"
-          echo "  jupyter lab                JupyterLab"
-          echo "  jupyter notebook           Notebook clasico"
-          echo "  uv pip install <pkg>       Instalar paquete"
+          echo "  ./run_tests.sh unit         Ejecutar tests unitarios"
+          echo "  ./run_tests.sh all          Ejecutar todos los tests"
+          echo "  jupyter lab                 JupyterLab"
+          echo "  uv pip install <pkg>        Instalar paquete"
           echo ""
           echo "Stack: NumPy, Pandas, Matplotlib, Scikit-learn, SQLAlchemy, psycopg2"
           echo ""

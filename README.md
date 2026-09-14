@@ -1,6 +1,6 @@
 # Health Analytics Colombia - Dimensional Data Warehouse
 
-ETL project for analyzing healthcare system affiliates and facility capacity in Colombia. Uses Docker and PostgreSQL as a dimensional data warehouse.
+ETL project for analyzing healthcare system affiliates and facility capacity in Colombia. Uses Docker/Podman and PostgreSQL as a dimensional data warehouse.
 
 ## Problem Statement and SDG Alignment
 
@@ -48,8 +48,6 @@ This project addresses this problem by building a dimensional data warehouse tha
 │   │   ├── affiliates_by_department_municipality_regime_20260906.csv
 │   │   └── healthcare_facilities_by_level_capacity_20260906.csv
 │   └── processed/                              # Clean data (generated)
-├── docs/
-│   └── ETL_2026-2_Project_FirstDelivery.pdf
 ├── sql/
 │   └── init.sql                                # Dimensional schema
 ├── src/
@@ -57,6 +55,7 @@ This project addresses this problem by building a dimensional data warehouse tha
 │   ├── config.py                               # Project configuration
 │   ├── extract.py                              # Extraction phase
 │   ├── transform.py                            # Transformation phase
+│   ├── validate.py                             # Validation phase
 │   ├── load.py                                 # Load phase
 │   └── etl_main.py                             # Main orchestrator
 ├── tests/
@@ -68,15 +67,15 @@ This project addresses this problem by building a dimensional data warehouse tha
 │   ├── test_transform.py                       # Transformation tests
 │   ├── test_load.py                            # Load tests
 │   ├── test_integration.py                     # Integration tests
-│   ├── run_tests.py                            # Test runner script
-│   └── requirements-tests.txt                  # Test dependencies
+│   └── run_tests.py                            # Test runner script
 ├── notebooks/
 │   └── 01_data_validation_cleanup.ipynb        # Validation and cleanup
 ├── logs/                                       # ETL process logs
-├── docker-compose.yml                          # Docker infrastructure
+├── docker-compose.yml                          # Docker/Podman infrastructure
 ├── Dockerfile                                  # ETL process image
 ├── requirements.txt                            # Python dependencies
-├── run_tests.sh                                # Quick test runner
+├── run_tests.sh                                # Quick test runner (Linux/macOS)
+├── run_tests.bat                               # Quick test runner (Windows)
 ├── .env                                        # Environment variables (not in Git)
 ├── .env.example                                # Variables template
 ├── .gitignore
@@ -100,11 +99,9 @@ The project uses **two fact tables** because they measure fundamentally differen
 | **Business process** | Health insurance enrollment | Hospital infrastructure capacity |
 | **Grain** | Municipality + Regime + Quarter | Facility + Capacity Type + Snapshot |
 | **Additivity** | Additive across time (can sum quarters) | Non-additive (snapshot, not accumulable) |
-| **Measures** | `numero_afiliados` (people) | `capacidad_instalada` (beds/rooms) |
+| **Measures** | `numero_afiliados` (people) | `capacity_amount` (beds/rooms) |
 | **Temporal behavior** | Changes monthly (enrollment flux) | Static snapshot (infrastructure changes slowly) |
 | **Analytical use** | R1-R5: enrollment trends, regime comparison | Cross-analysis: beds per 1,000 affiliates |
-
-Merging these into one fact table would violate dimensional modeling principles because the measures are not additive across the same dimensions, and the business processes are independent.
 
 ### Temporal Quarantine
 
@@ -120,8 +117,6 @@ Since the data covers different months within the same year, direct temporal com
 3. Cross-dataset analytical queries (beds per affiliate) use **both snapshots** with an explicit note that they represent different points in time
 4. Temporal trend analysis (R2, R4) is limited to `fact_affiliates` only
 
-This quarantine ensures that users understand the temporal mismatch and do not draw incorrect conclusions from comparing Q2 enrollment with Q4 infrastructure data.
-
 ### Star Model
 
 ``` mermaid
@@ -135,7 +130,7 @@ erDiagram
     dim_tipo_capacidad ||--o{ fact_capacidad : clasifica
 
     fact_afiliados {
-        int id_hecho PK
+        int sk_affiliate PK
         int sk_geografia FK
         int sk_tiempo FK
         int sk_regimen FK
@@ -143,17 +138,17 @@ erDiagram
     }
 
     fact_capacidad {
-        int id_capacidad PK
+        int sk_capacity PK
         int sk_tiempo FK
-        int sk_ips FK
-        int sk_tipo_capacidad FK
-        int capacidad_instalada
+        int sk_facility FK
+        int sk_capacity_type FK
+        int capacity_amount
     }
 
     dim_tiempo {
-        int sk_tiempo PK
-        int anio
-        int trimestre
+        int sk_time PK
+        int year
+        int quarter
         string periodo_codigo
     }
 
@@ -167,41 +162,41 @@ erDiagram
     }
 
     dim_municipio {
-        int sk_municipio PK
-        string codigo_dane
-        string nombre
+        int sk_municipality PK
+        string code
+        string name
         int sk_department FK
     }
 
     dim_regimen {
-        int sk_regimen PK
-        string codigo_regimen
-        string nombre_regimen
+        int sk_regime PK
+        string code
+        string description
     }
 
     dim_ips {
-        int sk_ips PK
-        string codigo_habilitacion
-        string nombre_ips
-        string naturaleza
-        int nivel_atencion
-        int sk_municipio FK
+        int sk_facility PK
+        string provider_code
+        string name
+        string nature
+        int care_level
+        int sk_municipality FK
     }
 
     dim_tipo_capacidad {
-        int sk_tipo_capacidad PK
-        string grupo
-        string descripcion
+        int sk_capacity_type PK
+        string group
+        string description
     }
 ```
 
 **Dimensions:**
-- `dim_tiempo` (Time): Year, quarter, period code (e.g. 2022-Q2)
+- `dim_time` (Time): Year, quarter, semester, period code (e.g. 2022-Q2)
 - `dim_geografia` (Geography): Municipality code/name, department code/name, geographic region (Amazonia, Orinoquia, Pacifico, Andina, Caribe, Insular)
-- `dim_municipio` (Municipality): Detailed municipality linked to department
-- `dim_regimen` (Regime): Code and description (Contributivo, Subsidiado, Especial, Individual)
-- `dim_ips` (Healthcare Facility): Provider data linked to municipality
-- `dim_tipo_capacidad` (Capacity Type): Group and description (CAMAS, SALAS, etc.)
+- `dim_department` / `dim_municipality`: Normalized department and municipality for facility path
+- `dim_regime` (Regime): Code and description (Contributivo, Subsidiado, Especial, Individual)
+- `dim_facility` (Healthcare Facility / IPS): Provider data linked to municipality
+- `dim_capacity_type` (Capacity Type): Group and description (CAMAS, SALAS, etc.)
 
 ### Text Normalization
 
@@ -226,23 +221,22 @@ All department and municipality names are normalized to prevent duplicates acros
 
 ### Prerequisites
 
-| Software | Minimum Version | Installation |
-|----------|-----------------|--------------|
-| Git | 2.0+ | `sudo apt install git` |
-| Docker | 20.10+ | [docs.docker.com](https://docs.docker.com/engine/install/) |
-| Docker Compose | 2.0+ | [docs.docker.com](https://docs.docker.com/compose/install/) |
-| Python | 3.8+ | Only for external notebooks |
-| Power BI Desktop | Latest | [powerbi.microsoft.com](https://powerbi.microsoft.com/) |
+| Software | Minimum Version | Notes |
+|----------|-----------------|-------|
+| Git | 2.0+ | Required |
+| Docker **or** Podman | Docker 20.10+ / Podman 4.0+ | Install one; both work identically |
+| Docker Compose **or** Podman Compose | Compose 2.0+ / podman-compose | Included with Docker Desktop |
+| Python | 3.11+ | Only for running tests locally outside containers |
+| Power BI Desktop | Latest | Optional, for visualization (Windows only) |
+
+> **Docker vs Podman:** All commands below work with both. On Windows, Docker Desktop is the simplest option. Podman can replace Docker 1:1 — just install `podman-compose` (`pip install podman-compose`) and use `podman-compose` in place of `docker-compose`.
 
 ---
 
 ### Step 1: Clone the Repository
 
 ```bash
-# Clone
 git clone git@github.com:driosoft-pro/etl-2026-2-ods3-salud.git
-
-# Enter directory
 cd etl-2026-2-ods3-salud
 ```
 
@@ -251,14 +245,11 @@ cd etl-2026-2-ods3-salud
 ### Step 2: Configure Environment Variables
 
 ```bash
-# Copy example file
 cp .env.example .env
-
-# Edit with your preferences (optional)
-nano .env
 ```
 
-**`.env` content:**
+Edit `.env` with your preferred credentials (optional — defaults work out of the box):
+
 ```bash
 POSTGRES_DB=salud_colombia
 POSTGRES_USER=etl_user
@@ -271,20 +262,43 @@ PGADMIN_DEFAULT_PASSWORD=admin123
 
 ---
 
-### Step 3: Start Docker Infrastructure
+### Step 3: Start Infrastructure
 
-```bash
-# Build images and start services
-docker-compose up -d
+#### Windows (PowerShell) — Docker
 
-# Verify containers are running
-docker-compose ps
-
-# View PostgreSQL logs (wait for "ready to accept connections")
+```powershell
+docker compose up -d
+docker compose ps
 docker logs -f warehouse_salud
 ```
 
-**Expected output:**
+#### Windows (PowerShell) — Podman
+
+```powershell
+podman-compose up -d
+podman-compose ps
+podman logs -f warehouse_salud
+```
+
+#### Linux/macOS — Docker
+
+```bash
+docker compose up -d
+docker compose ps
+docker logs -f warehouse_salud
+```
+
+#### Linux/macOS — Podman
+
+```bash
+podman-compose up -d
+podman-compose ps
+podman logs -f warehouse_salud
+```
+
+> **Note:** On NixOS, use `nix develop` first to get docker-compose in your PATH.
+
+Wait for PostgreSQL to be ready:
 ```
 warehouse_salud  | LOG:  database system is ready to accept connections
 ```
@@ -293,9 +307,28 @@ warehouse_salud  | LOG:  database system is ready to accept connections
 
 ### Step 4: Run ETL Process
 
+#### Windows (PowerShell) — Docker
+
+```powershell
+docker compose run --rm etl
+```
+
+#### Windows (PowerShell) — Podman
+
+```powershell
+podman-compose run --rm etl
+```
+
+#### Linux/macOS — Docker
+
 ```bash
-# Run complete ETL process
-docker-compose run --rm etl
+docker compose run --rm etl
+```
+
+#### Linux/macOS — Podman
+
+```bash
+podman-compose run --rm etl
 ```
 
 **Expected output:**
@@ -305,16 +338,23 @@ ETL PROCESS STARTED - HEALTH COLOMBIA
 ============================================================
 PHASE 1: EXTRACTION
 PHASE 2: TRANSFORMATION
+PHASE 2.5: VALIDATION
 PHASE 3: LOADING
 ============================================================
 ETL PROCESS COMPLETED SUCCESSFULLY
 ============================================================
 
-LOAD SUMMARY:
-   dim_time:          XX records
-   dim_department:    XX records
-   dim_municipality:  XX records
-   ...
+ LOAD SUMMARY:
+    dim_time:          X records
+    dim_geografia:     X records
+    dim_department:    X records
+    dim_municipality:  X records
+    dim_regime:        X records
+    dim_facility:      X records
+    dim_capacity_type: X records
+    fact_affiliates:   X records (quarterly)
+    fact_capacity:     X records
+    validations:       X errors
 ```
 
 ---
@@ -338,151 +378,61 @@ LOAD SUMMARY:
 
 ---
 
-### Step 6: Run Validation Notebook (Optional)
+### Step 6: Clean Up / Restart
 
-```bash
-# Start Jupyter Notebook
-docker-compose run --rm -p 8888:8888 etl jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+#### Windows (PowerShell) — Docker
 
-# Open in browser: http://localhost:8888
-```
-
----
-
-## Power BI Connection (Linux)
-
-Power BI Desktop is a Windows application, but can be used on Linux via:
-
-### Option 1: Power BI Service (Recommended for Linux)
-
-1. Open Power BI Service: https://app.powerbi.com
-2. Click "Get Data" → "Database" → "PostgreSQL database"
-3. Configure connection:
-   - **Server:** `localhost:5432`
-   - **Database:** `salud_colombia`
-4. Enter credentials:
-   - Username: `etl_user`
-   - Password: `etl_password_2026`
-5. Select tables to import
-
-### Option 2: Power BI Desktop via Wine (Linux)
-
-```bash
-# Install Wine (Ubuntu/Debian)
-sudo dpkg --add-architecture i386
-sudo apt update
-sudo apt install wine64 wine32
-
-# Download Power BI Desktop
-wget https://download.microsoft.com/download/8/6/6/866C4D51-A3D0-46CF-8B1D-B3F1AD78B362/PBIDesktopSetup_x64.exe
-
-# Install via Wine
-wine PBIDesktopSetup_x64.exe
-
-# Run
-wine ~/.wine/drive_c/Program\ Files/Microsoft\ Power\ BI\ Desktop/bin/PBIDesktop.exe
-```
-
-### Option 3: Direct Connection via Network Bridge
-
-PostgreSQL in Docker already exposes port 5432 to the host. Power BI can connect directly:
-
-```
-Power BI Desktop (Windows)
-    ↓ localhost:5432
-Docker Container (PostgreSQL)
-    ↓ Internal port 5432
-Database salud_colombia
-```
-
-**Power BI Configuration:**
-1. Get Data → PostgreSQL
-2. Server: `localhost` or `127.0.0.1`
-3. Port: `5432`
-4. Database: `salud_colombia`
-5. Username: `etl_user`
-6. Password: `etl_password_2026`
-
-### Tables Available for Power BI
-
-| Table | Description | Recommended Use |
-|-------|-------------|-----------------|
-| `v_affiliates_summary` | Consolidated affiliates view | Analysis by department/municipality |
-| `v_facility_summary` | Consolidated facility view | Installed capacity analysis |
-| `fact_affiliates` | Affiliates facts | Dimensional modeling |
-| `fact_facility_capacity` | Capacity facts | Dimensional modeling |
-| `dim_time` | Time dimension | Filters by year/month/quarter |
-| `dim_department` | Geographic dimension | Filters by department |
-| `dim_municipality` | Geographic dimension | Filters by municipality |
-| `dim_regime` | Regime dimension | Filters by regime type |
-| `dim_facility` | Facility dimension | Analysis by institution |
-| `dim_capacity_type` | Capacity dimension | Filters by resource type |
-
-### Power BI Dashboard Design
-
-The dashboard should include the following visualizations to address the analytical requirements:
-
-| Visualization | Type | Purpose | Requirement |
-|---------------|------|---------|-------------|
-| **Choropleth Map** | Map by department | Color-coded by subsidized/contributive ratio to show regional vulnerability | R3 |
-| **Temporal Line Chart** | Lines by quarter | Evolution of quarterly affiliates by regime and department | R2, R4 |
-| **KPI Cards** | Card visuals | Total national affiliates, contributory coverage percentage, subsidized/contributive ratio | Overview |
-| **Bar Chart** | Horizontal bars | Top 10 / Bottom 10 municipalities by contributory volume | R1 |
-| **Quartile Table** | Matrix | Municipalities classified by coverage quartile with color coding | R5 |
-| **Bed-to-Affiliate Ratio** | Map or table | Hospitals beds per 1,000 subsidized affiliates by municipality | IPS Analysis |
-
-**Dynamic Filters (Slicers):**
-- Year selector
-- Department selector
-- Regime type toggle (Contributivo / Subsidiado / Todos)
-- Geographic region filter (Amazonia, Orinoquia, Pacific, Andina, Caribe, Insular)
-
----
-
-## Useful Docker Commands
-
-```bash
-# View container status
-docker-compose ps
-
-# View logs in real time
-docker-compose logs -f
-
+```powershell
 # Stop all services
-docker-compose down
+docker compose down
 
-# Stop and remove volumes (clean data)
-docker-compose down -v
+# Stop and remove volumes (clean data, forces full ETL re-run)
+docker compose down -v
 
-# Rebuild images
-docker-compose build --no-cache
+# Rebuild images (after code changes)
+docker compose build --no-cache
+```
 
-# Enter PostgreSQL container
-docker exec -it warehouse_salud psql -U etl_user -d salud_colombia
+#### Windows (PowerShell) — Podman
 
-# Database backup
-docker exec warehouse_salud pg_dump -U etl_user salud_colombia > backup.sql
+```powershell
+podman-compose down
+podman-compose down -v
+podman-compose build --no-cache
+```
 
-# Restore backup
-cat backup.sql | docker exec -i warehouse_salud psql -U etl_user -d salud_colombia
+#### Linux/macOS — Docker
+
+```bash
+docker compose down
+docker compose down -v
+docker compose build --no-cache
+```
+
+#### Linux/macOS — Podman
+
+```bash
+podman-compose down
+podman-compose down -v
+podman-compose build --no-cache
+```
+
+**Full reset (recommended after pulling new changes):**
+```bash
+# Docker
+docker compose down -v && docker compose build --no-cache && docker compose up -d && docker compose run --rm etl
+
+# Podman
+podman-compose down -v && podman-compose build --no-cache && podman-compose up -d && podman-compose run --rm etl
 ```
 
 ---
 
 ## Test Execution
 
-### Test Structure
+### Run Tests Locally (Outside Containers)
 
-```
-tests/
-├── test_data_validation.py    # Raw data validation
-├── test_extract.py           # Extraction tests
-├── test_transform.py         # Transformation tests
-├── test_load.py              # Load and DB connection tests
-└── test_integration.py       # Full integration tests
-```
-
-### Run Tests
+#### Linux/macOS
 
 ```bash
 # Run all unit tests (no DB required)
@@ -498,27 +448,31 @@ tests/
 ./run_tests.sh all
 ```
 
-### Run with Docker
+#### Windows (PowerShell)
 
-```bash
-# Run tests inside ETL container
-docker-compose run --rm etl python -m pytest tests/ -v
+```powershell
+# Run all unit tests
+.\run_tests.bat unit
 
-# Run only unit tests
-docker-compose run --rm etl python -m pytest tests/ -v -m "unit"
+# Run ALL tests
+.\run_tests.bat all
 ```
 
-### Run with pytest Directly
+### Run Tests Inside Containers
 
 ```bash
-# Install test dependencies
-pip install -r tests/requirements-tests.txt
+# Docker
+docker compose run --rm etl python -m pytest tests/ -v
 
-# Run tests
+# Podman
+podman-compose run --rm etl python -m pytest tests/ -v
+```
+
+### Run Tests with pytest Directly
+
+```bash
+pip install -r requirements.txt
 python -m pytest tests/ -v
-
-# Run with coverage
-python -m pytest tests/ -v --cov=src --cov-report=html
 ```
 
 ### Test Types
@@ -531,24 +485,43 @@ python -m pytest tests/ -v --cov=src --cov-report=html
 
 ---
 
+## Useful Container Commands
+
+```bash
+# View container status
+docker compose ps          # or: podman-compose ps
+
+# View logs in real time
+docker compose logs -f      # or: podman-compose logs -f
+
+# Enter PostgreSQL container
+docker exec -it warehouse_salud psql -U etl_user -d salud_colombia
+
+# Database backup
+docker exec warehouse_salud pg_dump -U etl_user salud_colombia > backup.sql
+
+# Restore backup
+cat backup.sql | docker exec -i warehouse_salud psql -U etl_user -d salud_colombia
+```
+
+---
+
 ## Analytical SQL Queries (R1-R5)
 
 ### R1: 10 Municipalities with Lowest Contributory Affiliates (Last Year)
 
 ```sql
--- Identificar los 10 municipios con menor volumen de afiliados al régimen contributivo
--- en el último año reportado para priorizar planes de formalización laboral
 SELECT
     g.municipio,
     g.departamento,
     g.region,
     SUM(f.numero_afiliados) AS total_contributivos
-FROM fact_afiliates f
-JOIN dim_tiempo t ON f.sk_tiempo = t.sk_tiempo
+FROM fact_affiliates f
+JOIN dim_time t ON f.sk_time = t.sk_time
 JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
-JOIN dim_regimen r ON f.sk_regimen = r.sk_regimen
-WHERE r.codigo_regimen = 'C'
-  AND t.anio = (SELECT MAX(anio) FROM dim_tiempo)
+JOIN dim_regime r ON f.sk_regime = r.sk_regime
+WHERE r.code = 'C'
+  AND t.year = (SELECT MAX(year) FROM dim_time)
 GROUP BY g.municipio, g.departamento, g.region
 HAVING SUM(f.numero_afiliados) > 0
 ORDER BY total_contributivos ASC
@@ -558,73 +531,61 @@ LIMIT 10;
 ### R2: Subsidized Growth Rate Evolution by Department (Year/Quarter)
 
 ```sql
--- Analizar la evolución temporal (año/trimestre) de la tasa de crecimiento
--- de afiliados al régimen subsidiado por departamento
 WITH subsidizados AS (
     SELECT
         g.departamento,
-        t.anio,
-        t.trimestre,
+        t.year,
+        t.quarter,
         t.periodo_codigo,
         SUM(f.numero_afiliados) AS total_subsidizados
-    FROM fact_afiliates f
-    JOIN dim_tiempo t ON f.sk_tiempo = t.sk_tiempo
+    FROM fact_affiliates f
+    JOIN dim_time t ON f.sk_time = t.sk_time
     JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
-    JOIN dim_regimen r ON f.sk_regimen = r.sk_regimen
-    WHERE r.codigo_regimen = 'S'
-    GROUP BY g.departamento, t.anio, t.trimestre, t.periodo_codigo
+    JOIN dim_regime r ON f.sk_regime = r.sk_regime
+    WHERE r.code = 'S'
+    GROUP BY g.departamento, t.year, t.quarter, t.periodo_codigo
 ),
 con_crecimiento AS (
     SELECT
-        departamento,
-        anio,
-        trimestre,
-        periodo_codigo,
-        total_subsidizados,
+        departamento, year, quarter, periodo_codigo, total_subsidizados,
         LAG(total_subsidizados) OVER (
-            PARTITION BY departamento ORDER BY anio, trimestre
+            PARTITION BY departamento ORDER BY year, quarter
         ) AS total_anterior
     FROM subsidizados
 )
 SELECT
-    departamento,
-    anio,
-    trimestre,
-    periodo_codigo,
-    total_subsidizados,
-    total_anterior,
+    departamento, year, quarter, periodo_codigo,
+    total_subsidizados, total_anterior,
     CASE
         WHEN total_anterior > 0 THEN
             ROUND(((total_subsidizados - total_anterior)::NUMERIC / total_anterior) * 100, 2)
         ELSE NULL
     END AS tasa_crecimiento_pct
 FROM con_crecimiento
-ORDER BY departamento, anio, trimestre;
+ORDER BY departamento, year, quarter;
 ```
 
 ### R3: Subsidized vs Contributory Proportion by Geographic Subregion
 
 ```sql
--- Comparar la proporción entre régimen subsidiado vs. contributivo
--- por subregión geográfica para mapear vulnerabilidad socioeconómica
 SELECT
     g.region,
-    SUM(CASE WHEN r.codigo_regimen = 'S' THEN f.numero_afiliados ELSE 0 END) AS total_subsidiado,
-    SUM(CASE WHEN r.codigo_regimen = 'C' THEN f.numero_afiliados ELSE 0 END) AS total_contributivo,
+    SUM(CASE WHEN r.code = 'S' THEN f.numero_afiliados ELSE 0 END) AS total_subsidiado,
+    SUM(CASE WHEN r.code = 'C' THEN f.numero_afiliados ELSE 0 END) AS total_contributivo,
     SUM(f.numero_afiliados) AS total_general,
     ROUND(
-        SUM(CASE WHEN r.codigo_regimen = 'S' THEN f.numero_afiliados ELSE 0 END)::NUMERIC /
-        NULLIF(SUM(CASE WHEN r.codigo_regimen = 'C' THEN f.numero_afiliados ELSE 0 END), 0),
+        SUM(CASE WHEN r.code = 'S' THEN f.numero_afiliados ELSE 0 END)::NUMERIC /
+        NULLIF(SUM(CASE WHEN r.code = 'C' THEN f.numero_afiliados ELSE 0 END), 0),
         2
     ) AS ratio_subsidiado_contributivo,
     ROUND(
-        SUM(CASE WHEN r.codigo_regimen = 'S' THEN f.numero_afiliados ELSE 0 END)::NUMERIC /
+        SUM(CASE WHEN r.code = 'S' THEN f.numero_afiliados ELSE 0 END)::NUMERIC /
         NULLIF(SUM(f.numero_afiliados), 0) * 100,
         2
     ) AS pct_subsidiado
-FROM fact_afiliates f
+FROM fact_affiliates f
 JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
-JOIN dim_regimen r ON f.sk_regimen = r.sk_regimen
+JOIN dim_regime r ON f.sk_regime = r.sk_regime
 GROUP BY g.region
 ORDER BY pct_subsidiado DESC;
 ```
@@ -632,45 +593,33 @@ ORDER BY pct_subsidiado DESC;
 ### R4: Quarters with Largest Net Drops in Contributory Affiliation
 
 ```sql
--- Determinar los trimestres con mayores caídas netas de afiliación
--- contributiva a nivel departamental
 WITH contributivos AS (
     SELECT
         g.departamento,
-        t.anio,
-        t.trimestre,
+        t.year,
+        t.quarter,
         t.periodo_codigo,
         SUM(f.numero_afiliados) AS total_contributivo
-    FROM fact_afiliates f
-    JOIN dim_tiempo t ON f.sk_tiempo = t.sk_tiempo
+    FROM fact_affiliates f
+    JOIN dim_time t ON f.sk_time = t.sk_time
     JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
-    JOIN dim_regimen r ON f.sk_regimen = r.sk_regimen
-    WHERE r.codigo_regimen = 'C'
-    GROUP BY g.departamento, t.anio, t.trimestre, t.periodo_codigo
+    JOIN dim_regime r ON f.sk_regime = r.sk_regime
+    WHERE r.code = 'C'
+    GROUP BY g.departamento, t.year, t.quarter, t.periodo_codigo
 ),
 con_variacion AS (
     SELECT
-        departamento,
-        anio,
-        trimestre,
-        periodo_codigo,
-        total_contributivo,
+        departamento, year, quarter, periodo_codigo, total_contributivo,
         LAG(total_contributivo) OVER (
-            PARTITION BY departamento ORDER BY anio, trimestre
+            PARTITION BY departamento ORDER BY year, quarter
         ) AS total_anterior,
         total_contributivo - LAG(total_contributivo) OVER (
-            PARTITION BY departamento ORDER BY anio, trimestre
+            PARTITION BY departamento ORDER BY year, quarter
         ) AS variacion_neta
     FROM contributivos
 )
-SELECT
-    departamento,
-    anio,
-    trimestre,
-    periodo_codigo,
-    total_contributivo,
-    total_anterior,
-    variacion_neta
+SELECT departamento, year, quarter, periodo_codigo,
+       total_contributivo, total_anterior, variacion_neta
 FROM con_variacion
 WHERE variacion_neta < 0
 ORDER BY variacion_neta ASC
@@ -680,8 +629,6 @@ LIMIT 20;
 ### R5: Municipalities Classified by Coverage Quartiles
 
 ```sql
--- Clasificar los municipios en cuartiles según su cobertura de afiliación total
--- para detectar rezago en acceso territorial
 WITH cobertura AS (
     SELECT
         g.codigo_dane_municipio,
@@ -689,23 +636,18 @@ WITH cobertura AS (
         g.departamento,
         g.region,
         SUM(f.numero_afiliados) AS total_afiliados
-    FROM fact_afiliates f
+    FROM fact_affiliates f
     JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
     GROUP BY g.codigo_dane_municipio, g.municipio, g.departamento, g.region
 ),
 con_cuartiles AS (
-    SELECT
-        *,
+    SELECT *,
         NTILE(4) OVER (ORDER BY total_afiliados) AS cuartil
     FROM cobertura
 )
 SELECT
-    codigo_dane_municipio,
-    municipio,
-    departamento,
-    region,
-    total_afiliados,
-    cuartil,
+    codigo_dane_municipio, municipio, departamento, region,
+    total_afiliados, cuartil,
     CASE cuartil
         WHEN 1 THEN 'Muy bajo rezago'
         WHEN 2 THEN 'Bajo rezago'
@@ -719,30 +661,27 @@ ORDER BY cuartil, total_afiliados;
 ### IPS-Affiliate Cross Analysis: Hospital Beds per Subsidized Affiliate
 
 ```sql
--- Número de camas hospitalarias por cada 1.000 afiliados al régimen subsidiado
--- para detectar "desiertos de salud" (municipios con alta población asegurada
--- pero sin infraestructura suficiente)
 WITH afiliados_subsidiado AS (
     SELECT
         g.codigo_dane_municipio,
         g.municipio,
         g.departamento,
         SUM(f.numero_afiliados) AS total_subsidiado
-    FROM fact_afiliates f
+    FROM fact_affiliates f
     JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
-    JOIN dim_regimen r ON f.sk_regimen = r.sk_regimen
-    WHERE r.codigo_regimen = 'S'
+    JOIN dim_regime r ON f.sk_regime = r.sk_regime
+    WHERE r.code = 'S'
     GROUP BY g.codigo_dane_municipio, g.municipio, g.departamento
 ),
 camas AS (
     SELECT
         m.code AS codigo_dane_municipio,
         SUM(c.capacity_amount) AS total_camas
-    FROM fact_facility_capacity fc
-    JOIN dim_facility i ON fc.sk_facility = i.sk_facility
-    JOIN dim_municipio m ON i.sk_municipality = m.sk_municipality
-    JOIN dim_capacity_type ct ON fc.sk_capacity_type = ct.sk_capacity_type
-    WHERE ct.group = 'CAMAS'
+    FROM fact_facility_capacity c
+    JOIN dim_facility i ON c.sk_facility = i.sk_facility
+    JOIN dim_municipality m ON i.sk_municipality = m.sk_municipality
+    JOIN dim_capacity_type ct ON c.sk_capacity_type = ct.sk_capacity_type
+    WHERE ct."group" = 'CAMAS'
     GROUP BY m.code
 )
 SELECT
@@ -756,7 +695,7 @@ SELECT
     ) AS camas_por_1000_subsidiados,
     CASE
         WHEN COALESCE(c.total_camas, 0) = 0 THEN 'Desierto de salud'
-        WHEN COALESCE(c.total_camas, 0)::NUMERIC / NULLIF(a.total_subsidiado, 0) * 1000 < 1.0 THEN 'Infraestructura crítica'
+        WHEN COALESCE(c.total_camas, 0)::NUMERIC / NULLIF(a.total_subsidiado, 0) * 1000 < 1.0 THEN 'Infraestructura critica'
         WHEN COALESCE(c.total_camas, 0)::NUMERIC / NULLIF(a.total_subsidiado, 0) * 1000 < 2.0 THEN 'Infraestructura insuficiente'
         ELSE 'Infraestructura adecuada'
     END AS evaluacion_infraestructura
@@ -765,12 +704,11 @@ LEFT JOIN camas c ON a.codigo_dane_municipio = c.codigo_dane_municipio
 ORDER BY camas_por_1000_subsidiados ASC;
 ```
 
-### Public vs Private Provider Ratio by Contributory Predominance
+### Public vs Private Provider Ratio by Department
 
 ```sql
--- Ratio de prestadores públicos vs. privados según predominio de cotizantes contributivos
 SELECT
-    g.departamento,
+    d.name AS department,
     SUM(CASE WHEN i.nature = 'Publica' THEN 1 ELSE 0 END) AS prestadores_publicos,
     SUM(CASE WHEN i.nature = 'Privada' THEN 1 ELSE 0 END) AS prestadores_privados,
     ROUND(
@@ -781,8 +719,7 @@ SELECT
 FROM dim_facility i
 JOIN dim_municipality m ON i.sk_municipality = m.sk_municipality
 JOIN dim_department d ON m.sk_department = d.sk_department
-JOIN dim_geografia g ON g.codigo_dane_depto = d.code
-GROUP BY g.departamento
+GROUP BY d.name
 ORDER BY ratio_publico_privado DESC;
 ```
 
@@ -792,12 +729,13 @@ ORDER BY ratio_publico_privado DESC;
 
 | Problem | Solution |
 |---------|----------|
-| PostgreSQL won't start | Check port 5432 isn't in use: `sudo lsof -i :5432` |
-| Permission denied on volumes | Run: `sudo chown -R $USER:$USER ./data ./logs` |
-| ETL container fails | Check logs: `docker-compose logs etl` |
-| Power BI won't connect | Verify PostgreSQL is running: `docker-compose ps` |
-| No data in tables | Run ETL: `docker-compose run --rm etl` |
-| Jupyter won't start | Check port: `sudo lsof -i :8888` |
+| PostgreSQL won't start | Check port 5432 isn't in use: `sudo lsof -i :5432` (Linux) or `netstat -ano \| findstr :5432` (Windows) |
+| Permission denied on volumes | Linux: `sudo chown -R $USER:$USER ./data ./logs` |
+| ETL container fails | Check logs: `docker compose logs etl` (or `podman-compose logs etl`) |
+| `missing services [etlclear]` warning | Harmless podman-compose warning — can be ignored safely |
+| No data in tables | Run ETL: `docker compose run --rm etl` (or `podman-compose run --rm etl`) |
+| `pg_isready` fails | Wait longer — PostgreSQL may still be initializing on first run |
+| Power BI won't connect | Verify PostgreSQL is running: `docker compose ps` |
 
 ---
 
