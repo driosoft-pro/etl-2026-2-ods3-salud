@@ -14,7 +14,7 @@ def load_dimension(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     
     cursor = conn.cursor()
     
-    columns = [c for c in df.columns if c != pk_col]
+    columns = list(df.columns)
     quoted = [f'"{c}"' for c in columns]
     values = df[columns].values.tolist()
     
@@ -25,6 +25,9 @@ def load_dimension(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     """
     
     execute_values(cursor, insert_sql, values)
+    
+    cursor.execute(f"SELECT setval(pg_get_serial_sequence('{table_name}', '{pk_col}'), (SELECT COALESCE(MAX({pk_col}), 1) FROM {table_name}))")
+    
     conn.commit()
     
     logger.info(f"Dimension {table_name} loaded successfully")
