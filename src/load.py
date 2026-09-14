@@ -15,10 +15,11 @@ def load_dimension(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     cursor = conn.cursor()
     
     columns = [c for c in df.columns if c != pk_col]
+    quoted = [f'"{c}"' for c in columns]
     values = df[columns].values.tolist()
     
     insert_sql = f"""
-        INSERT INTO {table_name} ({', '.join(columns)})
+        INSERT INTO {table_name} ({', '.join(quoted)})
         VALUES %s
         ON CONFLICT DO NOTHING
     """
@@ -35,10 +36,11 @@ def load_fact(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     cursor = conn.cursor()
     
     columns = [c for c in df.columns if c != pk_col]
+    quoted = [f'"{c}"' for c in columns]
     values = df[columns].values.tolist()
     
     insert_sql = f"""
-        INSERT INTO {table_name} ({', '.join(columns)})
+        INSERT INTO {table_name} ({', '.join(quoted)})
         VALUES %s
         ON CONFLICT DO NOTHING
     """
