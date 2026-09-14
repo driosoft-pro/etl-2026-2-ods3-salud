@@ -58,7 +58,7 @@
 
           echo ""
           echo "╔══════════════════════════════════════════════════════════╗"
-          echo "║  ETL Salud Colombia — Warehouse Dimensional            ║"
+          echo "║  ETL Salud Colombia — Warehouse Dimensional              ║"
           echo "╚══════════════════════════════════════════════════════════╝"
           echo ""
           echo "Python:  $(python --version)"
