@@ -240,7 +240,8 @@ def build_fact_affiliates(df_affiliates: pd.DataFrame, dim_time: pd.DataFrame,
     return fact_agg
 
 def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataFrame,
-                                  dim_fac: pd.DataFrame, dim_ct: pd.DataFrame) -> pd.DataFrame:
+                                  dim_fac: pd.DataFrame, dim_ct: pd.DataFrame,
+                                  dim_mun: pd.DataFrame, dim_dept: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building facility capacity fact table...")
     
     time_key = (2022, 4)
@@ -249,10 +250,20 @@ def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataF
         sk_time_val = sk_time_val.iloc[0]
     
     fact = df_facilities[['provider_code', 'capacity_group', 'capacity_description',
-                           'installed_capacity']].copy()
+                           'installed_capacity', 'municipality', 'department']].copy()
     
-    fac_key = dim_fac.set_index('provider_code')['sk_facility'].to_dict()
-    fact['sk_facility'] = fact['provider_code'].map(fac_key)
+    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
+    muni_to_sk = dim_mun.set_index(['name', 'sk_department'])['sk_municipality'].to_dict()
+    fact['sk_municipality'] = fact.apply(
+        lambda r: muni_to_sk.get((r['municipality'], dept_to_sk.get(r['department']))), axis=1
+    )
+    fact = fact.dropna(subset=['sk_municipality'])
+    fact['sk_municipality'] = fact['sk_municipality'].astype(int)
+    
+    fac_key = dim_fac.set_index(['provider_code', 'sk_municipality'])['sk_facility'].to_dict()
+    fact['sk_facility'] = fact.apply(
+        lambda r: fac_key.get((r['provider_code'], r['sk_municipality'])), axis=1
+    )
     
     ct_key = dim_ct.set_index(['group', 'description'])['sk_capacity_type'].to_dict()
     fact['sk_capacity_type'] = fact.apply(

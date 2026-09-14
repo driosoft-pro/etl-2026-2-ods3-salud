@@ -46,7 +46,7 @@ def run_etl():
         
         logger.info("Building fact tables...")
         fact_affiliates = build_fact_affiliates(df_affiliates, dim_time, dim_geografia, dim_regime)
-        fact_capacity = build_fact_facility_capacity(df_facilities, dim_time, dim_facility, dim_capacity_type)
+        fact_capacity = build_fact_facility_capacity(df_facilities, dim_time, dim_facility, dim_capacity_type, dim_municipality, dim_department)
         
         logger.info("PHASE 2.5: VALIDATION")
         validations = run_all_validations(
