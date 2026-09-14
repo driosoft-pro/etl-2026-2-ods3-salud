@@ -36,7 +36,7 @@ def clean_affiliates(df: pd.DataFrame) -> pd.DataFrame:
 def clean_facilities(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Cleaning facilities dataset...")
     
-    df['care_level'] = pd.to_numeric(df['care_level'], errors='coerce')
+    df['care_level'] = pd.to_numeric(df['care_level'], errors='coerce').fillna(0).astype(int)
     df['installed_capacity'] = pd.to_numeric(df['installed_capacity'], errors='coerce').fillna(0).astype(int)
     
     df['nit'] = df['nit'].str.replace(',', '', regex=False)
