@@ -40,7 +40,7 @@ def clean_facilities(df: pd.DataFrame) -> pd.DataFrame:
     df['installed_capacity'] = pd.to_numeric(df['installed_capacity'], errors='coerce').fillna(0).astype(int)
     
     df['nit'] = df['nit'].str.replace(',', '', regex=False)
-    df['phone'] = df['phone'].str.split('-').str[0].str.strip()
+    df['phone'] = df['phone'].str.extract(r'(\d+)')[0]
     
     df['department'] = df['department'].apply(normalize_text)
     df['municipality'] = df['municipality'].apply(normalize_text)
