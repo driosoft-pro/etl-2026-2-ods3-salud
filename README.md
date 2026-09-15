@@ -467,7 +467,8 @@ ORDER BY capacity_per_affiliate ASC;
 SELECT
     g.region,
     r.description AS regime,
-    SUM(f.numero_afiliados) AS total_affiliates
+    SUM(f.numero_afiliados) AS total_affiliates,
+    ROUND(SUM(f.numero_afiliados) * 100.0 / SUM(SUM(f.numero_afiliados)) OVER(PARTITION BY g.region), 2) AS pct_within_region
 FROM fact_affiliates f
 JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
 JOIN dim_regime r ON f.sk_regime = r.sk_regime
@@ -477,7 +478,7 @@ ORDER BY g.region, total_affiliates DESC;
 
 | DW Tables | Metric/KPI | Main Result |
 |---|---|---|
-| fact_affiliates, dim_geografia, dim_regime | Affiliate distribution by region and regime | The Andina region concentrates the majority of affiliates across both regimes. Subsidized affiliates are proportionally higher in Pacifico and Amazonia regions. |
+| fact_affiliates, dim_geografia, dim_regime | Affiliate distribution by region and regime; percentage within each region | The Andina region concentrates the majority of affiliates across both regimes. Subsidized affiliates are proportionally higher in Pacifico and Amazonia regions. |
 
 ---
 
@@ -492,6 +493,49 @@ ORDER BY g.region, total_affiliates DESC;
 | **Referential Integrity** | Dimension surrogate keys are sequential and non-null | Serial sequences reset via `setval()` after load |
 | **Business Rules** | NumPersonas > 0; valid regime codes (S, C, E, I) | Enforced during transform; validated in `validate_raw_affiliates()` |
 | **Reconciliation** | Sum of fact measure matches source total within 1% | `validate_sum_consistency()` compares fact total vs. source sum |
+| **Row Count Recovery** | Unique facilities in fact table match source unique facilities | `validate_row_count()` with `nunique('sk_facility')` vs `provider_code.nunique()` |
+
+---
+
+## 13.1 Data Quality Verification Results
+
+After the full ETL pipeline execution, the following results confirm data integrity:
+
+### Load Summary
+
+| Table | Records | Description |
+|---|---|---|
+| dim_time | 2 | Q2 2022 (affiliates) + Q4 2022 (facilities) |
+| dim_geografia | 2,239 | All municipalities with DANE codes and region |
+| dim_department | 33 | All 32 departments + Bogotá D.C. |
+| dim_municipality | 1,167 | Municipalities from affiliates + facility-only municipalities |
+| dim_regime | 4 | Subsidized, Contributory, Special, Individual |
+| dim_facility | 10,921 | Unique healthcare providers (IPS) |
+| dim_capacity_type | 63 | CAMAS/SALAS × TPR/Adultos/Pediátrica combinations |
+| fact_affiliates | 3,367 | Quarterly granularity (quarter + municipality + regime) |
+| fact_facility_capacity | 31,496 | Aggregated by facility + capacity type (deduplicated) |
+
+### Validation Results
+
+| Check | Result |
+|---|---|
+| FK nulls (fact_affiliates) | 0 |
+| FK nulls (fact_facility_capacity) | 0 |
+| Negative measures | 0 |
+| Duplicate fact keys | 0 |
+| Sum consistency (affiliates) | 49,866,537 = 49,866,537 (100% match) |
+| Unmapped municipalities | 0 |
+| Total validation errors | **0** |
+
+### Data Quality Fixes Applied
+
+| Issue | Root Cause | Fix |
+|---|---|---|
+| 5,072 facility rows silently dropped | Special health districts (Cali, Cartagena, Barranquilla, Santa Marta, Buenaventura) reported as "department" in REPS | `DISTRICT_TO_DEPT` mapping in `config.py` redirects to real departments |
+| 80 municipalities unmapped | CAUCA missing from `DEPT_DANE_CODES`; facility-only municipalities not in affiliates dataset | Added CAUCA (code 19); `build_dim_municipality` now merges both datasets |
+| 13,970 duplicate fact keys | Raw REPS data has duplicate rows per facility + capacity type | `build_fact_facility_capacity` now aggregates with `groupby().sum()` |
+| Validation false positive | `len(df_facilities)` compared total rows (41,427) against unique facilities (10,921) | Changed to `provider_code.nunique()` for apples-to-apples comparison |
+| CASANARE wrong DANE code | CASANARE had code 19 (duplicate with CAUCA) | Corrected to 85 |
 
 ---
 
@@ -772,10 +816,11 @@ DBeaver is a free, universal database tool used to visualize and query the Data 
 ## 18. Limitations and Assumptions
 
 1. **Temporal snapshot limitation:** Both datasets are cross-sectional snapshots (Q2 2022 for affiliates, Q4 2022 for facilities). True temporal trend analysis would require multiple periods.
-2. **Care level gaps:** 61% of facility records lack a care level value, limiting the granularity of care-level analysis.
+2. **Care level gaps:** 61% of facility records lack a care level value, limiting the granularity of care-level analysis. Missing values are filled with 0 and treated as "No reporta".
 3. **Affiliation ≠ Access:** High affiliation rates do not necessarily guarantee effective healthcare access. The analysis measures system enrollment, not service utilization.
 4. **Capacity definition:** `capacity_amount` represents installed capacity (beds, rooms, equipment), not operational or effective capacity.
-5. **Geographic mapping:** Facility-to-municipality mapping uses DANE codes from the affiliates dataset; facilities in municipalities not present in the affiliates data are excluded from geographic joins.
+5. **Facility municipalities:** Facilities in municipalities not present in the affiliates dataset are recovered via synthetic DANE codes (hashlib.md5) to preserve REPS data completeness.
+6. **Cross-dataset comparison caveat:** R4 (capacity per affiliate) uses Q4 2022 capacity data with Q2 2022 affiliation data. The ratio is indicative, not temporally precise.
 
 ---
 
