@@ -74,15 +74,19 @@ def validate_sum_consistency(fact_df: pd.DataFrame, original_total: int,
     return errors
 
 def validate_row_count(fact_df: pd.DataFrame, raw_count: int,
-                       tolerance_pct: float = 0.05) -> list:
+                       tolerance_pct: float = 0.05,
+                       unique_col: str = None) -> list:
     errors = []
-    fact_count = len(fact_df)
-    diff = abs(fact_count - raw_count)
+    if unique_col and unique_col in fact_df.columns:
+        fact_count = fact_df[unique_col].nunique()
+    else:
+        fact_count = len(fact_df)
+    diff = raw_count - fact_count
     threshold = raw_count * tolerance_pct
     if diff > threshold:
         errors.append(
             f"Row count mismatch: fact={fact_count:,} vs raw={raw_count:,} "
-            f"(lost {raw_count - fact_count:,} rows, {((raw_count - fact_count) / raw_count * 100):.1f}%)"
+            f"(lost {diff:,} rows, {(diff / raw_count * 100):.1f}%)"
         )
     return errors
 
@@ -127,7 +131,7 @@ def run_all_validations(fact_affiliates: pd.DataFrame, fact_capacity: pd.DataFra
     all_errors['fact_capacity_fk'] = capacity_fk
     
     if raw_facility_count is not None:
-        row_errors = validate_row_count(fact_capacity, raw_facility_count)
+        row_errors = validate_row_count(fact_capacity, raw_facility_count, unique_col='sk_facility')
         all_errors['fact_capacity_rows'] = row_errors
     
     total_errors = sum(len(v) for v in all_errors.values())
