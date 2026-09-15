@@ -195,6 +195,7 @@ def build_dim_facility(df_facilities: pd.DataFrame, dim_mun: pd.DataFrame,
     dim_fac['sk_municipality'] = dim_fac['sk_municipality'].astype(int)
     
     dim_fac = dim_fac.drop(columns=['municipality_name', 'dept_name'])
+    dim_fac = dim_fac.drop_duplicates(subset=['provider_code', 'sk_municipality']).reset_index(drop=True)
     dim_fac['sk_facility'] = dim_fac.index + 1
     
     logger.info(f"Facility dimension records: {len(dim_fac)}")
