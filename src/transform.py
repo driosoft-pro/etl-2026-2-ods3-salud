@@ -153,15 +153,28 @@ def build_dim_municipality(df_affiliates: pd.DataFrame, df_facilities: pd.DataFr
                            dim_dept: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building municipality dimension...")
     
+    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
+    
     mun_aff = df_affiliates[['municipality_code', 'municipality', 'department']].drop_duplicates()
     mun_aff.columns = ['code', 'name', 'dept_name']
-    
-    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
     mun_aff['sk_department'] = mun_aff['dept_name'].map(dept_to_sk)
     mun_aff = mun_aff.drop(columns=['dept_name']).dropna(subset=['sk_department'])
     mun_aff['sk_department'] = mun_aff['sk_department'].astype(int)
     
-    dim_mun = mun_aff.drop_duplicates(subset=['code']).reset_index(drop=True)
+    fac_munis = df_facilities[['municipality', 'department']].drop_duplicates()
+    fac_munis.columns = ['name', 'dept_name']
+    fac_munis['sk_department'] = fac_munis['dept_name'].map(dept_to_sk)
+    fac_munis = fac_munis.dropna(subset=['sk_department'])
+    fac_munis['sk_department'] = fac_munis['sk_department'].astype(int)
+    existing = set(zip(mun_aff['name'], mun_aff['sk_department']))
+    fac_munis = fac_munis[~fac_munis.apply(lambda r: (r['name'], r['sk_department']) in existing, axis=1)]
+    fac_munis['code'] = fac_munis.apply(
+        lambda r: f"{dept_to_sk.get(r['dept_name'], '00')}{int.from_bytes(hashlib.md5(r['name'].encode()).digest()[:4], 'big') % 10000:04d}",
+        axis=1
+    )
+    fac_munis = fac_munis[['code', 'name', 'sk_department']]
+    
+    dim_mun = pd.concat([mun_aff, fac_munis]).drop_duplicates(subset=['code']).reset_index(drop=True)
     dim_mun['sk_municipality'] = dim_mun.index + 1
     
     logger.info(f"Municipality dimension records: {len(dim_mun)}")
