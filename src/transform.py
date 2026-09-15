@@ -296,8 +296,10 @@ def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataF
     fact['sk_facility'] = fact['sk_facility'].astype(int)
     fact['sk_capacity_type'] = fact['sk_capacity_type'].astype(int)
     
-    fact = fact[['sk_time', 'sk_facility', 'sk_capacity_type', 'installed_capacity']]
-    fact = fact.rename(columns={'installed_capacity': 'capacity_amount'})
+    fact = fact.groupby(['sk_time', 'sk_facility', 'sk_capacity_type']).agg(
+        capacity_amount=('installed_capacity', 'sum')
+    ).reset_index()
+    
     fact['sk_capacity'] = fact.index + 1
     
     logger.info(f"Facility capacity fact records: {len(fact)}")
