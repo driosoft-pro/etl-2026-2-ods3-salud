@@ -9,7 +9,7 @@ from .transform import (
     build_fact_affiliates, build_fact_facility_capacity
 )
 from .validate import run_all_validations
-from .load import load_all
+from .load import load_all, export_to_csv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +77,9 @@ def run_etl():
         logger.info("PHASE 3: LOADING")
         load_all(dimensions, facts)
         
+        logger.info("PHASE 4: CSV EXPORT")
+        export_to_csv(dimensions, facts)
+        
         logger.info("=" * 60)
         logger.info("ETL PROCESS COMPLETED SUCCESSFULLY")
         logger.info("=" * 60)
@@ -92,6 +95,7 @@ def run_etl():
         print(f"   fact_affiliates:   {len(fact_affiliates)} records (quarterly)")
         print(f"   fact_capacity:     {len(fact_capacity)} records")
         print(f"   validations:       {total_errors} errors")
+        print(f"   CSV export:        data/processed/ directory")
         
     except Exception as e:
         logger.error(f"ETL process error: {e}")

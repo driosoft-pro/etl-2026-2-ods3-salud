@@ -16,6 +16,9 @@ ENV/
 data/processed/*.csv
 !data/processed/.gitkeep
 
+# Generated output (dashboard screenshots)
+visualizations/*.png
+
 # IDE
 .vscode/
 .idea/

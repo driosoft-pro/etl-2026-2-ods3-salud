@@ -300,6 +300,8 @@ These represent fundamentally different business processes (enrollment vs. infra
 
 ```
 Source CSVs → Extract (extract.py) → Transform (transform.py) → Validate (validate.py) → Load (load.py) → PostgreSQL DW
+                                                                                                    ↓
+                                                                                              CSV Export → data/processed/
 ```
 
 ### 10.2 Extract (`src/extract.py`)
@@ -340,6 +342,7 @@ Source CSVs → Extract (extract.py) → Transform (transform.py) → Validate (
 - Uses `ON CONFLICT DO NOTHING` for idempotency
 - Resets serial sequences after load (`setval`)
 - Single transaction: commits on success, rolls back on failure
+- **CSV Export:** After PostgreSQL load, exports all dimension and fact tables as individual CSV files to `data/processed/` for alternative BI tool ingestion (e.g., Power BI direct CSV import)
 
 ---
 
@@ -502,7 +505,11 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 - **KPIs:** Total affiliates nationally, total installed capacity, capacity-to-affiliate ratio.
 - **Filters:** By department, region, regime type, facility nature, and time period.
 
-> **Note:** Dashboard screenshots and Power BI file (`.pbix`) are available in `docs/dashboard.png`.
+**Data Loading Options for Power BI:**
+1. **PostgreSQL connection** (recommended): Direct connection to the Data Warehouse using the PostgreSQL connector.
+2. **CSV import**: Alternative — load individual CSV files from `data/processed/` (dim_time.csv, dim_geografia.csv, fact_affiliates.csv, etc.). Each CSV includes surrogate keys for joining tables in Power BI.
+
+> **Note:** Dashboard screenshots are saved in `visualizations/`. Source diagrams are in `diagrams/`.
 
 ---
 
@@ -598,7 +605,16 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   6. SQL / KPIs     │
+│   6. CSV EXPORT     │
+│   load.py           │
+│   data/processed/   │
+│   dim_*.csv         │
+│   fact_*.csv        │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│   7. SQL / KPIs     │
 │   analytical_queries│
 │   R1–R5 queries     │
 │   Metrics & KPIs    │
@@ -606,7 +622,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   7. BI / DASHBOARD │
+│   8. BI / DASHBOARD │
 │   Power BI          │
 │   Connects to DW    │
 │   Maps, KPIs, Filters│
@@ -614,7 +630,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   8. INSIGHTS       │
+│   9. INSIGHTS       │
 │   Interpretation    │
 │   Decision Support  │
 └─────────────────────┘
@@ -816,7 +832,9 @@ This automatically sets up Python 3.12, PostgreSQL, Docker/Podman, Jupyter, and 
 etl-project-first-delivery/
 ├── data/
 │   ├── raw/                              # Source CSV files (preserved)
-│   └── processed/                        # Intermediate cleaned files
+│   └── processed/                        # ETL output: dimension & fact CSVs for Power BI
+├── diagrams/                             # Mermaid/star schema diagram sources
+├── visualizations/                       # Dashboard screenshots
 ├── notebooks/
 │   └── 01_data_validation_cleanup.ipynb  # Jupyter profiling notebook
 ├── src/
@@ -825,7 +843,7 @@ etl-project-first-delivery/
 │   ├── extract.py                        # CSV ingestion
 │   ├── transform.py                      # Cleaning + dimensional builders
 │   ├── validate.py                       # Data quality checks
-│   ├── load.py                           # PostgreSQL bulk load
+│   ├── load.py                           # PostgreSQL bulk load + CSV export
 │   └── etl_main.py                       # Pipeline orchestrator
 ├── sql/
 │   ├── init.sql                          # DW schema (DDL)
@@ -863,6 +881,9 @@ EOF
 docker compose build --no-cache && docker compose up -d && docker compose run --rm etl
 # OR
 podman-compose build --no-cache && podman-compose up -d && podman-compose run --rm etl
+
+# After ETL completes, CSV files are in data/processed/
+ls data/processed/
 ```
 
 ### Quick Start without Docker (Local)

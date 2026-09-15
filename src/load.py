@@ -82,3 +82,18 @@ def load_all(dimensions: dict, facts: dict):
         raise
     finally:
         conn.close()
+
+def export_to_csv(dimensions: dict, facts: dict):
+    output_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'processed')
+    os.makedirs(output_dir, exist_ok=True)
+
+    all_tables = {}
+    for name, df in dimensions.items():
+        all_tables[f"dim_{name}"] = df
+    for name, df in facts.items():
+        all_tables[f"fact_{name}"] = df
+
+    for table_name, df in all_tables.items():
+        path = os.path.join(output_dir, f"{table_name}.csv")
+        df.to_csv(path, index=False)
+        logger.info(f"Exported {table_name}: {len(df)} records → {path}")
