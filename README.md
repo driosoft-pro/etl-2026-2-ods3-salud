@@ -748,6 +748,29 @@ DBeaver is a free, universal database tool used to visualize and query the Data 
 | BI Dashboard | Power BI |
 | Version Control | Git, GitHub |
 
+### Option F: Nix Flake (NixOS / Linux)
+
+If you use Nix with the provided `flake.nix`, enter the development shell:
+
+```bash
+nix develop
+```
+
+This automatically sets up Python 3.12, PostgreSQL, Docker/Podman, Jupyter, and all dependencies.
+
+**Available commands inside the Nix shell:**
+
+| Command | Description |
+|---|---|
+| `docker-compose up -d` | Start infrastructure (Docker) |
+| `podman-compose up -d` | Start infrastructure (Podman) |
+| `docker-compose run --rm etl` | Run ETL pipeline |
+| `./run_tests.sh unit` | Run unit tests |
+| `./run_tests.sh all` | Run all tests |
+| `jupyter lab` | Start JupyterLab |
+| `jupyter notebook` | Start classic Jupyter Notebook |
+| `uv pip install <pkg>` | Install a package |
+
 ---
 
 ## 20. Team Members and Responsibilities
