@@ -46,8 +46,19 @@ DEPT_NORMALIZE = {
     'VALLE DEL CAUCA': 'VALLE DEL CAUCA',
     'VALLE': 'VALLE DEL CAUCA',
     'BOGOTA D.C.': 'BOGOTA D.C.',
+    'BOGOTA D.C': 'BOGOTA D.C.',
     'BOGOTA': 'BOGOTA D.C.',
     'NO APLICA': None,
+}
+
+# Distritos Especiales de Salud: REPS los reporta como "departamento",
+# pero son ciudades con autoridad sanitaria propia dentro de su departamento real.
+DISTRICT_TO_DEPT = {
+    'CARTAGENA': 'BOLIVAR',
+    'SANTA MARTA': 'MAGDALENA',
+    'CALI': 'VALLE DEL CAUCA',
+    'BARRANQUILLA': 'ATLANTICO',
+    'BUENAVENTURA': 'VALLE DEL CAUCA',
 }
 
 REGIME_MAP = {

@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from .config import (
     MONTHS, REGION_MAP, REGIME_MAP, DEPT_NORMALIZE,
-    DEPT_DANE_CODES, normalize_text
+    DEPT_DANE_CODES, DISTRICT_TO_DEPT, normalize_text
 )
 import logging
 
@@ -48,6 +48,7 @@ def clean_facilities(df: pd.DataFrame) -> pd.DataFrame:
     df['department'] = df['department'].apply(normalize_text)
     df['municipality'] = df['municipality'].apply(normalize_text)
     
+    df['department'] = df['department'].map(lambda x: DISTRICT_TO_DEPT.get(x, x))
     df['department'] = df['department'].map(lambda x: DEPT_NORMALIZE.get(x, x))
     df = df.dropna(subset=['department'])
     

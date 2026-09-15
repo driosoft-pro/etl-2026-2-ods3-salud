@@ -53,7 +53,8 @@ def run_etl():
         validations = run_all_validations(
             fact_affiliates, fact_capacity,
             dim_time, dim_geografia, dim_regime, dim_facility, dim_capacity_type,
-            original_total=original_total
+            original_total=original_total,
+            raw_facility_count=len(df_facilities)
         )
         total_errors = sum(len(v) for v in validations.values())
         if total_errors > 0:
