@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 from .extract import extract_all
 from .transform import (
     clean_affiliates, clean_facilities,
@@ -15,7 +16,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/app/logs/etl.log')
+        logging.FileHandler(os.path.join(os.path.dirname(__file__), '..', 'etl.log'))
     ]
 )
 logger = logging.getLogger(__name__)

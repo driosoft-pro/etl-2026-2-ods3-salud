@@ -1,0 +1,111 @@
+erDiagram
+
+    %% ========================================
+    %% FACT TABLES (center)
+    %% ========================================
+
+    fact_affiliates {
+        SERIAL sk_affiliate PK
+        INTEGER sk_time FK
+        INTEGER sk_geografia FK
+        INTEGER sk_regime FK
+        BIGINT numero_afiliados
+    }
+
+    fact_facility_capacity {
+        SERIAL sk_capacity PK
+        INTEGER sk_time FK
+        INTEGER sk_facility FK
+        INTEGER sk_capacity_type FK
+        INTEGER capacity_amount
+    }
+
+    %% ========================================
+    %% DIMENSIONS - fact_affiliates
+    %% ========================================
+
+    dim_time {
+        SERIAL sk_time PK
+        INTEGER year
+        INTEGER month
+        VARCHAR month_name
+        INTEGER quarter
+        INTEGER semester
+        VARCHAR periodo_codigo
+        DATE full_date
+    }
+
+    dim_geografia {
+        SERIAL sk_geografia PK
+        VARCHAR codigo_dane_municipio
+        VARCHAR municipio
+        VARCHAR codigo_dane_depto
+        VARCHAR departamento
+        VARCHAR region
+    }
+
+    dim_regime {
+        SERIAL sk_regime PK
+        VARCHAR code
+        VARCHAR description
+    }
+
+    %% ========================================
+    %% DIMENSIONS - fact_facility_capacity
+    %% ========================================
+
+    dim_facility {
+        SERIAL sk_facility PK
+        VARCHAR provider_code
+        VARCHAR name
+        VARCHAR nit
+        VARCHAR nature
+        INTEGER care_level
+        VARCHAR manager
+        VARCHAR address
+        VARCHAR email
+        VARCHAR phone
+        INTEGER sk_municipality FK
+    }
+
+    dim_capacity_type {
+        SERIAL sk_capacity_type PK
+        VARCHAR "group"
+        VARCHAR description
+    }
+
+    dim_municipality {
+        SERIAL sk_municipality PK
+        VARCHAR code
+        VARCHAR name
+        INTEGER sk_department FK
+    }
+
+    dim_department {
+        SERIAL sk_department PK
+        VARCHAR code
+        VARCHAR name
+    }
+
+    %% ========================================
+    %% RELATIONSHIPS - Star 1: fact_affiliates
+    %% ========================================
+
+    fact_affiliates }o--|| dim_time : "sk_time"
+    fact_affiliates }o--|| dim_geografia : "sk_geografia"
+    fact_affiliates }o--|| dim_regime : "sk_regime"
+
+    %% ========================================
+    %% RELATIONSHIPS - Star 2: fact_facility_capacity
+    %% ========================================
+
+    fact_facility_capacity }o--|| dim_time : "sk_time"
+    fact_facility_capacity }o--|| dim_facility : "sk_facility"
+    fact_facility_capacity }o--|| dim_capacity_type : "sk_capacity_type"
+
+    %% ========================================
+    %% HIERARCHY - municipality -> department
+    %% ========================================
+
+    dim_municipality }o--|| dim_department : "sk_department"
+    dim_facility }o--|| dim_municipality : "sk_municipality"

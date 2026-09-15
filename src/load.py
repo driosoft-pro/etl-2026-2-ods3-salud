@@ -3,61 +3,65 @@ import psycopg2
 from psycopg2.extras import execute_values
 from .config import DB_CONFIG
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
+def reset_schema(conn):
+    init_path = os.path.join(os.path.dirname(__file__), '..', 'sql', 'init.sql')
+    with open(init_path, 'r') as f:
+        sql = f.read()
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+    logger.info("Schema reset from init.sql")
+
 def load_dimension(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     logger.info(f"Loading dimension {table_name}: {len(df)} records")
     
-    cursor = conn.cursor()
-    
-    columns = list(df.columns)
-    quoted = [f'"{c}"' for c in columns]
-    values = df[columns].values.tolist()
-    
-    insert_sql = f"""
-        INSERT INTO {table_name} ({', '.join(quoted)})
-        VALUES %s
-        ON CONFLICT DO NOTHING
-    """
-    
-    execute_values(cursor, insert_sql, values)
-    
-    cursor.execute(f"SELECT setval(pg_get_serial_sequence('{table_name}', '{pk_col}'), (SELECT COALESCE(MAX({pk_col}), 1) FROM {table_name}))")
-    
-    conn.commit()
+    with conn.cursor() as cursor:
+        columns = list(df.columns)
+        quoted = [f'"{c}"' for c in columns]
+        values = df[columns].values.tolist()
+        
+        insert_sql = f"""
+            INSERT INTO {table_name} ({', '.join(quoted)})
+            VALUES %s
+            ON CONFLICT DO NOTHING
+        """
+        
+        execute_values(cursor, insert_sql, values)
+        
+        cursor.execute(f"SELECT setval(pg_get_serial_sequence('{table_name}', '{pk_col}'), (SELECT COALESCE(MAX({pk_col}), 1) FROM {table_name}))")
     
     logger.info(f"Dimension {table_name} loaded successfully")
-    cursor.close()
 
 def load_fact(conn, table_name: str, df: pd.DataFrame, pk_col: str):
     logger.info(f"Loading fact table {table_name}: {len(df)} records")
     
-    cursor = conn.cursor()
-    
-    columns = [c for c in df.columns if c != pk_col]
-    quoted = [f'"{c}"' for c in columns]
-    values = df[columns].values.tolist()
-    
-    insert_sql = f"""
-        INSERT INTO {table_name} ({', '.join(quoted)})
-        VALUES %s
-        ON CONFLICT DO NOTHING
-    """
-    
-    execute_values(cursor, insert_sql, values)
-    conn.commit()
+    with conn.cursor() as cursor:
+        columns = [c for c in df.columns if c != pk_col]
+        quoted = [f'"{c}"' for c in columns]
+        values = df[columns].values.tolist()
+        
+        insert_sql = f"""
+            INSERT INTO {table_name} ({', '.join(quoted)})
+            VALUES %s
+            ON CONFLICT DO NOTHING
+        """
+        
+        execute_values(cursor, insert_sql, values)
     
     logger.info(f"Fact table {table_name} loaded successfully")
-    cursor.close()
 
 def load_all(dimensions: dict, facts: dict):
     conn = get_connection()
-    
+
     try:
+        reset_schema(conn)
+
         load_dimension(conn, 'dim_time', dimensions['time'], 'sk_time')
         load_dimension(conn, 'dim_department', dimensions['department'], 'sk_department')
         load_dimension(conn, 'dim_municipality', dimensions['municipality'], 'sk_municipality')
@@ -69,6 +73,7 @@ def load_all(dimensions: dict, facts: dict):
         load_fact(conn, 'fact_affiliates', facts['affiliates'], 'sk_affiliate')
         load_fact(conn, 'fact_facility_capacity', facts['capacity'], 'sk_capacity')
         
+        conn.commit()
         logger.info("Load completed successfully")
         
     except Exception as e:

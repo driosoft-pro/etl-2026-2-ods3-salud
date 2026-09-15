@@ -1,6 +1,5 @@
 import os
 import unicodedata
-import re
 
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -10,7 +9,7 @@ DB_CONFIG = {
     'password': os.getenv('DB_PASSWORD', 'etl_password_2026')
 }
 
-DATA_DIR = '/app/data/raw'
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'raw')
 
 DATASETS = {
     'affiliates': 'affiliates_by_department_municipality_regime_20260906.csv',
@@ -71,8 +70,7 @@ DEPT_DANE_CODES = {
     'CHOCO': '27',
     'CORDOBA': '23',
     'CUNDINAMARCA': '25',
-    'CHOCO': '27',
-    'GUAINIA': '44',
+    'GUAINIA': '94',
     'HUILA': '41',
     'LA GUAJIRA': '44',
     'MAGDALENA': '47',
@@ -101,6 +99,7 @@ REGION_MAP = {
     'VICHADA': 'Amazonia',
     'ARAUCA': 'Orinoquia',
     'CASANARE': 'Orinoquia',
+    'GUAINIA': 'Orinoquia',
     'META': 'Orinoquia',
     'NORTE DE SANTANDER': 'Orinoquia',
     'ANTIOQUIA': 'Andina',

@@ -43,6 +43,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./src:/app/src
+      - ./sql:/app/sql
       - ./logs:/app/logs
     depends_on:
       postgres:

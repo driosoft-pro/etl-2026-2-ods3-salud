@@ -12,6 +12,22 @@
 -- =====================================================
 
 -- =====================================================
+-- DROP EXISTING OBJECTS (idempotent reset)
+-- =====================================================
+
+DROP TABLE IF EXISTS fact_facility_capacity CASCADE;
+DROP TABLE IF EXISTS fact_affiliates CASCADE;
+DROP TABLE IF EXISTS dim_capacity_type CASCADE;
+DROP TABLE IF EXISTS dim_facility CASCADE;
+DROP TABLE IF EXISTS dim_regime CASCADE;
+DROP TABLE IF EXISTS dim_municipality CASCADE;
+DROP TABLE IF EXISTS dim_department CASCADE;
+DROP TABLE IF EXISTS dim_geografia CASCADE;
+DROP TABLE IF EXISTS dim_time CASCADE;
+DROP VIEW IF EXISTS v_affiliates_summary CASCADE;
+DROP VIEW IF EXISTS v_facility_summary CASCADE;
+
+-- =====================================================
 -- DIMENSIONS
 -- =====================================================
 
