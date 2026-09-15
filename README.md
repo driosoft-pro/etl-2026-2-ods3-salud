@@ -208,6 +208,7 @@ erDiagram
         SERIAL sk_department PK
         VARCHAR code
         VARCHAR name
+        VARCHAR region
     }
 
     dim_municipality {
@@ -275,7 +276,7 @@ erDiagram
 |---|---|
 | **dim_time** | Temporal analysis is required by R1, R2, R4, R5. Quarterly granularity matches the data snapshot. Semester and year enable multi-level temporal roll-ups. |
 | **dim_geografia** | Geographic analysis required by R2, R4, R5. Includes DANE codes for official interoperability and region for regional grouping. |
-| **dim_department** | Department-level analysis required by R2, R4. Separate from dim_geografia to support the facility hierarchy (IPS → municipality → department). |
+| **dim_department** | Department-level analysis required by R2, R4. Separate from dim_geografia to support the facility hierarchy (IPS → municipality → department). Includes region for regional capacity analysis. |
 | **dim_municipality** | Municipality-level granularity required for territorial equity analysis (R5). Links to department for hierarchical drilling. |
 | **dim_regime** | Regime type is the core analytical dimension for R1, R5. Maps S/C/E/I codes to descriptive names. |
 | **dim_facility** | Facility-level analysis required by R3, R4. Contains provider attributes (nature, care level, contact) for descriptive slicing. |
@@ -349,7 +350,7 @@ Source CSVs → Extract (extract.py) → Transform (transform.py) → Validate (
 | **R1** — Affiliates by regime | dim_regime, dim_time | numero_afiliados | Total affiliates grouped by regime description | Yes |
 | **R2** — Department density | dim_geografia, dim_department, dim_time | numero_afiliados | Top/bottom departments by total affiliates | Yes |
 | **R3** — Facilities by nature/level | dim_facility, dim_capacity_type | capacity_amount | Count of facilities by nature; capacity by care level | Yes |
-| **R4** — Capacity per affiliate | dim_facility, dim_geografia, dim_time | capacity_amount, numero_afiliados | capacity_amount / numero_afiliados ratio by department | Yes |
+| **R4** — Capacity per affiliate | dim_facility, dim_geografia, dim_department | capacity_amount, numero_afiliados | capacity_amount / numero_afiliados ratio by department | Yes |
 | **R5** — Regime × Geography | dim_regime, dim_geografia, dim_department | numero_afiliados | Subsidized vs Contributory distribution across departments | Yes |
 
 All five requirements are fully supported by the dimensional model.
@@ -380,20 +381,29 @@ ORDER BY total_affiliates DESC;
 ### R2 — Top and Bottom Departments by Affiliate Count
 
 ```sql
-SELECT
-    d.name AS department,
-    SUM(f.numero_afiliados) AS total_affiliates
-FROM fact_affiliates f
-JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
-JOIN dim_department d ON g.codigo_dane_depto = d.code
-GROUP BY d.name
-ORDER BY total_affiliates DESC
-LIMIT 10;
+SELECT department, total_affiliates, 'Top 10' AS category FROM (
+    SELECT g.departamento AS department, SUM(f.numero_afiliados) AS total_affiliates
+    FROM fact_affiliates f
+    JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
+    GROUP BY g.departamento
+    ORDER BY total_affiliates DESC
+    LIMIT 10
+) top10
+UNION ALL
+SELECT department, total_affiliates, 'Bottom 10' AS category FROM (
+    SELECT g.departamento AS department, SUM(f.numero_afiliados) AS total_affiliates
+    FROM fact_affiliates f
+    JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
+    GROUP BY g.departamento
+    ORDER BY total_affiliates ASC
+    LIMIT 10
+) bottom10
+ORDER BY category DESC, total_affiliates DESC;
 ```
 
 | DW Tables | Metric/KPI | Main Result |
 |---|---|---|
-| fact_affiliates, dim_geografia, dim_department | Top departments by affiliate volume | Bogotá D.C., Antioquia, and Valle del Cauca concentrate the largest affiliate populations, reflecting urban population concentration. |
+| fact_affiliates, dim_geografia | Top and bottom departments by affiliate volume | Bogotá D.C., Antioquia, and Valle del Cauca concentrate the largest affiliate populations. Smaller departments like Vaupés, Guainía, and Vichada have the fewest affiliates, reflecting low population density. |
 
 ### R3 — Facilities by Nature and Care Level
 
@@ -416,21 +426,37 @@ ORDER BY fc.nature, fc.care_level;
 ### R4 — Installed Capacity per Affiliate by Department
 
 ```sql
+WITH capacity_by_dept AS (
+    SELECT
+        d.name AS department,
+        SUM(c.capacity_amount) AS total_capacity
+    FROM fact_facility_capacity c
+    JOIN dim_facility fc ON c.sk_facility = fc.sk_facility
+    JOIN dim_municipality m ON fc.sk_municipality = m.sk_municipality
+    JOIN dim_department d ON m.sk_department = d.sk_department
+    GROUP BY d.name
+),
+affiliates_by_dept AS (
+    SELECT
+        g.departamento AS department,
+        SUM(f.numero_afiliados) AS total_affiliates
+    FROM fact_affiliates f
+    JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
+    GROUP BY g.departamento
+)
 SELECT
-    g.departamento,
-    SUM(DISTINCT c.capacity_amount) AS total_capacity,
-    SUM(f.numero_afiliados) AS total_affiliates,
-    ROUND(SUM(DISTINCT c.capacity_amount)::numeric / NULLIF(SUM(f.numero_afiliados), 0), 4) AS capacity_per_affiliate
-FROM fact_affiliates f
-JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
-JOIN fact_facility_capacity c ON c.sk_time = f.sk_time
-GROUP BY g.departamento
+    COALESCE(a.department, c.department) AS department,
+    COALESCE(c.total_capacity, 0) AS total_capacity,
+    COALESCE(a.total_affiliates, 0) AS total_affiliates,
+    ROUND(COALESCE(c.total_capacity, 0)::numeric / NULLIF(COALESCE(a.total_affiliates, 0), 0), 4) AS capacity_per_affiliate
+FROM affiliates_by_dept a
+FULL OUTER JOIN capacity_by_dept c ON a.department = c.department
 ORDER BY capacity_per_affiliate ASC;
 ```
 
 | DW Tables | Metric/KPI | Main Result |
 |---|---|---|
-| fact_affiliates, fact_facility_capacity, dim_geografia | Capacity-to-affiliate ratio by department | Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages. |
+| fact_affiliates, fact_facility_capacity, dim_geografia, dim_department | Capacity-to-affiliate ratio by department | Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages. |
 
 ### R5 — Regime Distribution by Geographic Region
 

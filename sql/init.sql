@@ -58,7 +58,8 @@ CREATE TABLE dim_geografia (
 CREATE TABLE dim_department (
     sk_department SERIAL PRIMARY KEY,
     code VARCHAR(5) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL
+    name VARCHAR(100) NOT NULL,
+    region VARCHAR(50) NOT NULL DEFAULT 'Sin Region'
 );
 
 -- Municipality Dimension (used by facility path: IPS -> municipality)
@@ -143,6 +144,7 @@ CREATE INDEX idx_fact_capacity_type ON fact_facility_capacity(sk_capacity_type);
 
 CREATE INDEX idx_geografia_depto ON dim_geografia(codigo_dane_depto);
 CREATE INDEX idx_geografia_region ON dim_geografia(region);
+CREATE INDEX idx_department_region ON dim_department(region);
 CREATE INDEX idx_municipality_department ON dim_municipality(sk_department);
 CREATE INDEX idx_facility_municipality ON dim_facility(sk_municipality);
 
@@ -170,6 +172,7 @@ JOIN dim_regime r ON f.sk_regime = r.sk_regime;
 CREATE VIEW v_facility_summary AS
 SELECT
     d.name AS department,
+    d.region AS department_region,
     m.name AS municipality,
     i.name AS facility,
     i.nature,

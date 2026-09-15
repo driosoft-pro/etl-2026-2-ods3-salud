@@ -1,3 +1,4 @@
+import hashlib
 import pandas as pd
 import numpy as np
 from .config import (
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 def clean_affiliates(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Cleaning affiliates dataset...")
+    df = df.copy()
     
     df['num_persons'] = df['num_persons'].str.replace('.', '', regex=False)
     df['num_persons'] = pd.to_numeric(df['num_persons'], errors='coerce').fillna(0).astype(int)
@@ -35,6 +37,7 @@ def clean_affiliates(df: pd.DataFrame) -> pd.DataFrame:
 
 def clean_facilities(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Cleaning facilities dataset...")
+    df = df.copy()
     
     df['care_level'] = pd.to_numeric(df['care_level'], errors='coerce').fillna(0).astype(int)
     df['installed_capacity'] = pd.to_numeric(df['installed_capacity'], errors='coerce').fillna(0).astype(int)
@@ -109,7 +112,7 @@ def build_dim_geografia(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame
     geo_fac['codigo_dane_depto'] = geo_fac['department'].map(dept_map)
     geo_fac = geo_fac.dropna(subset=['codigo_dane_depto'])
     geo_fac['codigo_dane_municipio'] = geo_fac.apply(
-        lambda r: f"{r['codigo_dane_depto']}{hash(r['municipality']) % 10000:04d}", axis=1
+        lambda r: f"{r['codigo_dane_depto']}{int.from_bytes(hashlib.md5(r['municipality'].encode()).digest()[:4], 'big') % 10000:04d}", axis=1
     )
     geo_fac['region'] = geo_fac['department'].map(REGION_MAP).fillna('Sin Region')
     geo_fac = geo_fac[['codigo_dane_municipio', 'municipality', 'codigo_dane_depto',
@@ -136,7 +139,8 @@ def build_dim_department(df_affiliates: pd.DataFrame, df_facilities: pd.DataFram
         code = DEPT_DANE_CODES.get(dept, df_affiliates[df_affiliates['department'] == dept]['department_code'].iloc[0]
                                    if dept in df_affiliates['department'].values else None)
         if code:
-            rows.append({'code': code, 'name': dept})
+            region = REGION_MAP.get(dept, 'Sin Region')
+            rows.append({'code': code, 'name': dept, 'region': region})
     
     dim_dept = pd.DataFrame(rows).drop_duplicates(subset=['code']).reset_index(drop=True)
     dim_dept['sk_department'] = dim_dept.index + 1

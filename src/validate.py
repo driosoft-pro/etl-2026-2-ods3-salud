@@ -53,7 +53,7 @@ def validate_raw_affiliates(df: pd.DataFrame) -> list:
         if (vals < 0).sum() > 0:
             errors.append("num_persons contains negative values")
     if 'regime_id' in df.columns:
-        valid = {'S', 'E', 'C'}
+        valid = {'S', 'E', 'C', 'I'}
         invalid = set(df['regime_id'].unique()) - valid
         if invalid:
             errors.append(f"Invalid regime codes: {invalid}")

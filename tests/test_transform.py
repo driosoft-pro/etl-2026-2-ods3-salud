@@ -146,6 +146,13 @@ class TestDimDepartment:
     def test_has_code_name(self):
         assert 'code' in self.dim.columns
         assert 'name' in self.dim.columns
+    
+    def test_has_region(self):
+        assert 'region' in self.dim.columns
+        valid_regions = {'Amazonia', 'Orinoquia', 'Andina', 'Pacifico',
+                         'Caribe', 'Insular', 'Sin Region'}
+        actual = set(self.dim['region'].unique())
+        assert actual <= valid_regions, f"Unexpected regions: {actual - valid_regions}"
 
 
 @pytest.mark.unit
@@ -186,7 +193,7 @@ class TestDimRegime:
     
     def test_valid_values(self):
         codes = set(self.dim['code'])
-        assert codes <= {'S', 'E', 'C'}, f"Invalid codes: {codes}"
+        assert codes <= {'S', 'E', 'C', 'I'}, f"Invalid codes: {codes}"
     
     def test_descriptions(self):
         assert 'description' in self.dim.columns
