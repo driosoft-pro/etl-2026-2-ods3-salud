@@ -163,7 +163,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 | **Department name normalization** | Uppercase, remove accents (NFKD), map aliases (e.g., "VALLE" → "VALLE DEL CAUCA") | Ensure consistent department names across datasets for joins |
 | **"NO APLICA" department** | Drop rows where department = "NO APLICA" | Records with no geographic assignment cannot be mapped to dimensions |
 | **Zero affiliates** | Drop rows where NumPersonas ≤ 0 | Zero-count records do not contribute to analytical value |
-| **Missing care level (61% null)** | Fill with 0 and treat as "No reporta" | Care level is not critical for capacity analysis; imputation would introduce bias |
+| **Missing care level (61% null)** | Store as NULL (nullable integer) | Care level is not critical for capacity analysis; NULL preserves data integrity without introducing artificial categories |
 | **Duplicate facility rows** | Keep unique (provider_code, municipality) combinations | Each facility appears once in dim_facility; capacity types are separate entries |
 | **Derived: quarter, periodo_codigo** | Compute quarter from month, generate "YYYY-QN" code | Enables temporal aggregation at quarterly granularity |
 | **Derived: region** | Map departments to 6 official regions (Amazonia, Andina, Caribe, Insular, Orinoquia, Pacifico) | Enables regional-level analysis required by R2 and R5 |
@@ -307,7 +307,6 @@ Source CSVs → Extract (extract.py) → Transform (transform.py) → Validate (
 ### 10.2 Extract (`src/extract.py`)
 - Reads raw CSV files with `pd.read_csv(dtype=str)` to preserve original formatting
 - Renames columns from Spanish to English for consistency
-- Maps departments to regions using `REGION_MAP`
 - No business transformations applied during extraction
 
 ### 10.3 Transform (`src/transform.py`)
@@ -315,6 +314,7 @@ Source CSVs → Extract (extract.py) → Transform (transform.py) → Validate (
 **Data Preparation:**
 - Removes thousand-separator periods from `NumPersonas`, converts to integer
 - Normalizes department and municipality names (accent removal, uppercase, alias mapping)
+- Maps departments to regions using `REGION_MAP` (after normalization, ensuring correct mapping)
 - Drops records with "NO APLICA" departments and zero affiliates
 - Extracts numeric digits from phone numbers
 - Removes commas from NIT values
@@ -379,7 +379,7 @@ ORDER BY total_affiliates DESC;
 
 | DW Tables | Metric/KPI | Main Result |
 |---|---|---|
-| fact_affiliates, dim_regime | Total affiliates per regime; percentage share | Subsidized regime dominates with ~60% of affiliates, followed by Contributory (~38%). Special and Individual regimes represent <2%. |
+| fact_affiliates, dim_regime | Total affiliates per regime; percentage share | Subsidized and Contributory regimes are nearly balanced nationally (~48% vs ~47.5%), with Special and Individual regimes representing <5%. The real disparity emerges at the regional level (see R5). |
 
 ### R2 — Top and Bottom Departments by Affiliate Count
 
@@ -459,7 +459,7 @@ ORDER BY capacity_per_affiliate ASC;
 
 | DW Tables | Metric/KPI | Main Result |
 |---|---|---|
-| fact_affiliates, fact_facility_capacity, dim_geografia, dim_department | Capacity-to-affiliate ratio by department | Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages. |
+| fact_affiliates, fact_facility_capacity, dim_geografia, dim_department | Capacity-to-affiliate ratio by department | Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages. SIN DEPARTAMENTO (non-geolocalized records) is excluded from this analysis. |
 
 ### R5 — Regime Distribution by Geographic Region
 
@@ -478,7 +478,7 @@ ORDER BY g.region, total_affiliates DESC;
 
 | DW Tables | Metric/KPI | Main Result |
 |---|---|---|
-| fact_affiliates, dim_geografia, dim_regime | Affiliate distribution by region and regime; percentage within each region | The Andina region concentrates the majority of affiliates across both regimes. Subsidized affiliates are proportionally higher in Pacifico and Amazonia regions. |
+| fact_affiliates, dim_geografia, dim_regime | Affiliate distribution by region and regime; percentage within each region | The Andina region concentrates the majority of affiliates. Pacifico shows a strong Subsidized majority (driven by Valle del Cauca, Chocó, and Nariño). Amazonia has the highest proportional Subsidized concentration. |
 
 ---
 
@@ -541,6 +541,7 @@ After the full ETL pipeline execution, the following results confirm data integr
 | CASANARE wrong DANE code | CASANARE had code 19 (duplicate with CAUCA) | Corrected to 85 |
 | Non-deterministic hash | Python `hash()` varies across runs | Replaced with `hashlib.md5()` |
 | 29 facilities from AMAZONAS/GUAVIARE dropped | `DEPT_DANE_CODES` missing these two departments | Added `'AMAZONAS': '91'`, `'GUAVIARE': '95'` + new `validate_department_consistency()` check |
+| Valle del Cauca (4.6M affiliates) mapped to "Sin Region" | `region` calculated in `extract.py` before `DEPT_NORMALIZE` corrected "VALLE" → "VALLE DEL CAUCA" | Moved `region` calculation to `clean_affiliates()` after normalization; added `validate_department_region_consistency()` |
 
 ---
 
@@ -564,13 +565,13 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 
 ## 15. Analytical Interpretation
 
-### Finding 1: Subsidized Regime Concentration in Underserved Regions
+### Finding 1: Subsidized Regime Concentration in Peripheral Regions
 
-**What does the data show?** The Subsidized regime accounts for approximately 60% of all affiliates nationally, and its proportion is significantly higher in the Pacifico (Chocó, Valle del Cauca, Nariño) and Amazonia regions compared to the Andina region.
+**What does the data show?** At the national level, Subsidized (~48%) and Contributory (~47.5%) regimes are nearly balanced. However, the geographic distribution reveals sharp disparities: the Subsidized regime is proportionally much higher in the Pacifico (Chocó, Valle del Cauca, Nariño) and Amazonia regions, while the Contributory regime dominates in Andina and Caribe. This regional concentration — rather than national majority — is the defining characteristic of the Colombian healthcare system's affiliation pattern.
 
 **Which requirement does it address?** R5 — Relationship between regime type and geographic distribution.
 
-**Why is it relevant in the Colombian context?** The Subsidized regime covers the lowest-income population. Higher concentrations in peripheral regions suggest these populations depend heavily on state-funded healthcare. However, these same regions often have fewer healthcare facilities, creating an access gap between affiliation and actual service delivery.
+**Why is it relevant in the Colombian context?** The Subsidized regime covers the lowest-income population. Its disproportionate concentration in peripheral regions (Pacifico, Amazonia) suggests these populations depend heavily on state-funded healthcare. However, these same regions often have fewer healthcare facilities, creating an access gap between affiliation and actual service delivery.
 
 **What decision or further investigation could it support?** Target infrastructure investment in departments with high Subsidized affiliation but low capacity-to-affiliate ratios. Investigate whether Subsidized affiliates in these regions face longer wait times or travel distances.
 
@@ -586,7 +587,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 
 ### Finding 3: Public-Private Mix Varies by Care Complexity
 
-**What does the data show?** Public healthcare facilities dominate at higher care levels (3 and 4 — hospital and specialized care), while private facilities are more prevalent at lower care levels (1 and 2 — basic and intermediate care).
+**What does the data show?** Public healthcare facilities dominate at higher care levels (3 and 4 — hospital and specialized care), while private facilities are more prevalent at lower care levels (1 and 2 — basic and intermediate care). A small number of facilities (15) report as "Mixta" (mixed nature), representing a marginal third category.
 
 **Which requirement does it address?** R3 — Distribution of healthcare facilities by nature and care level.
 
@@ -821,7 +822,7 @@ DBeaver is a free, universal database tool used to visualize and query the Data 
 ## 18. Limitations and Assumptions
 
 1. **Temporal snapshot limitation:** Both datasets are cross-sectional snapshots (Q2 2022 for affiliates, Q4 2022 for facilities). True temporal trend analysis would require multiple periods.
-2. **Care level gaps:** 61% of facility records lack a care level value, limiting the granularity of care-level analysis. Missing values are filled with 0 and treated as "No reporta".
+2. **Care level gaps:** 61% of facility records lack a care level value, limiting the granularity of care-level analysis. Missing values are stored as NULL in the data warehouse.
 3. **Affiliation ≠ Access:** High affiliation rates do not necessarily guarantee effective healthcare access. The analysis measures system enrollment, not service utilization.
 4. **Capacity definition:** `capacity_amount` represents installed capacity (beds, rooms, equipment), not operational or effective capacity.
 5. **Facility municipalities:** Facilities in municipalities not present in the affiliates dataset are recovered via synthetic DANE codes (hashlib.md5) to preserve REPS data completeness.

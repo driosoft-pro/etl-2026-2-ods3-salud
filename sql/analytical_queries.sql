@@ -85,6 +85,7 @@ WITH capacity_by_dept AS (
     JOIN dim_facility fc ON c.sk_facility = fc.sk_facility
     JOIN dim_municipality m ON fc.sk_municipality = m.sk_municipality
     JOIN dim_department d ON m.sk_department = d.sk_department
+    WHERE d.name NOT IN ('SIN DEPARTAMENTO')
     GROUP BY d.name
 ),
 affiliates_by_dept AS (
@@ -93,6 +94,7 @@ affiliates_by_dept AS (
         SUM(f.numero_afiliados) AS total_affiliates
     FROM fact_affiliates f
     JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
+    WHERE g.departamento NOT IN ('SIN DEPARTAMENTO')
     GROUP BY g.departamento
 )
 SELECT

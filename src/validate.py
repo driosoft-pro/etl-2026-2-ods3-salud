@@ -102,6 +102,20 @@ def validate_department_consistency(dim_geografia: pd.DataFrame,
         )
     return errors
 
+def validate_department_region_consistency(dim_department: pd.DataFrame) -> list:
+    errors = []
+    known_exceptions = {'SIN DEPARTAMENTO'}
+    sin_region = dim_department[
+        (dim_department['region'] == 'Sin Region') &
+        (~dim_department['name'].isin(known_exceptions))
+    ]
+    if len(sin_region) > 0:
+        depts = sorted(sin_region['name'].tolist())
+        errors.append(
+            f"Real departments mapped to 'Sin Region' (should have a region): {depts}"
+        )
+    return errors
+
 def run_all_validations(fact_affiliates: pd.DataFrame, fact_capacity: pd.DataFrame,
                          dim_time: pd.DataFrame, dim_geografia: pd.DataFrame,
                          dim_regime: pd.DataFrame, dim_facility: pd.DataFrame,
@@ -150,6 +164,8 @@ def run_all_validations(fact_affiliates: pd.DataFrame, fact_capacity: pd.DataFra
     if dim_department is not None:
         dept_errors = validate_department_consistency(dim_geografia, dim_department)
         all_errors['department_consistency'] = dept_errors
+        region_errors = validate_department_region_consistency(dim_department)
+        all_errors['department_region_consistency'] = region_errors
     
     total_errors = sum(len(v) for v in all_errors.values())
     if total_errors == 0:

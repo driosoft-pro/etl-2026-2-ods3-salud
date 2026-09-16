@@ -321,3 +321,28 @@ class TestValidate:
         assert null_count == 25266, f"Expected 25266 null care_level values, got {null_count}"
         non_null = df_facilities_clean['care_level'].dropna()
         assert all(int(v) >= 1 for v in non_null), "Non-null care_level values must be >= 1"
+
+    def test_region_calculation_after_normalize(self, df_affiliates_clean):
+        valle_rows = df_affiliates_clean[df_affiliates_clean['department'] == 'VALLE DEL CAUCA']
+        assert len(valle_rows) > 0, "VALLE DEL CAUCA not found in cleaned affiliates"
+        assert (valle_rows['region'] == 'Pacifico').all(), \
+            "VALLE DEL CAUCA should be in Pacifico region"
+
+    def test_no_real_dept_in_sin_region(self, df_affiliates_clean):
+        sin_region = df_affiliates_clean[df_affiliates_clean['region'] == 'Sin Region']
+        if len(sin_region) > 0:
+            depts = set(sin_region['department'].unique())
+            assert depts <= {'SIN DEPARTAMENTO'}, \
+                f"Real departments incorrectly mapped to Sin Region: {depts - {'SIN DEPARTAMENTO'}}"
+
+    def test_validate_department_region_consistency(self):
+        from src.validate import validate_department_region_consistency
+        dept = pd.DataFrame({'name': ['ANTIOQUIA', 'SIN DEPARTAMENTO'], 'region': ['Andina', 'Sin Region']})
+        errors = validate_department_region_consistency(dept)
+        assert len(errors) == 0
+
+    def test_validate_department_region_consistency_fails(self):
+        from src.validate import validate_department_region_consistency
+        dept = pd.DataFrame({'name': ['ANTIOQUIA', 'VALLE'], 'region': ['Sin Region', 'Sin Region']})
+        errors = validate_department_region_consistency(dept)
+        assert len(errors) > 0

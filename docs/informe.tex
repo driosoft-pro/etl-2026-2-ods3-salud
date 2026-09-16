@@ -314,7 +314,6 @@ Validate (validate.py) -> Load (load.py) -> PostgreSQL DW
 \begin{itemize}[nosep]
     \item Reads raw CSV files with \texttt{pd.read\_csv(dtype=str)} to preserve original formatting.
     \item Renames columns from Spanish to English for consistency.
-    \item Maps departments to regions using \texttt{REGION\_MAP}.
 \end{itemize}
 
 \subsection{Transform (\texttt{src/transform.py})}
@@ -323,6 +322,7 @@ Validate (validate.py) -> Load (load.py) -> PostgreSQL DW
 \begin{itemize}[nosep]
     \item Removes thousand-separator periods from \texttt{NumPersonas}, converts to integer.
     \item Normalizes department and municipality names (accent removal, uppercase, alias mapping).
+    \item Maps departments to regions using \texttt{REGION\_MAP} (after normalization, ensuring correct mapping).
     \item Maps ``NO APLICA'' to ``SIN DEPARTAMENTO'' with synthetic DANE code ``00'' (preserves 1,315,701 affiliates).
     \item Maps special health districts (Cali, Cartagena, etc.) to their real departments.
     \item Extracts numeric digits from phone numbers; removes commas from NIT values.
@@ -395,6 +395,8 @@ Non-deterministic hash & Python \texttt{hash()} varies across runs & Replaced wi
 Raw total computed post-clean & Validation compared against already-cleaned total & \texttt{raw\_total} computed before \texttt{clean\_affiliates()}\\
 \addlinespace
 29 facilities from AMAZONAS/GUAVIARE dropped & \texttt{DEPT\_DANE\_CODES} missing these departments & Added \texttt{'AMAZONAS': '91'}, \texttt{'GUAVIARE': '95'} + new \texttt{validate\_department\_consistency()}\\
+\addlinespace
+Valle del Cauca (4.6M affiliates) mapped to ``Sin Region'' & \texttt{region} calculated before \texttt{DEPT\_NORMALIZE} corrected ``VALLE'' $\to$ ``VALLE DEL CAUCA'' & Moved \texttt{region} calculation to \texttt{clean\_affiliates()} after normalization; added \texttt{validate\_department\_region\_consistency()}\\
 \bottomrule
 \end{tabularx}
 \caption{Data quality issues identified and resolved.}
@@ -418,7 +420,7 @@ GROUP BY r.description
 ORDER BY total_affiliates DESC;
 \end{lstlisting}
 
-\textbf{Result:} Subsidized regime dominates with $\sim$60\% of affiliates, followed by Contributory ($\sim$38\%). Special and Individual $<$2\%.
+\textbf{Result:} Subsidized and Contributory regimes are nearly balanced nationally ($\sim$48\% vs $\sim$47.5\%). Special and Individual $<$5\%. The real disparity emerges at the regional level (see R5).
 
 \subsection{R2 --- Top and Bottom Departments}
 
@@ -438,13 +440,13 @@ GROUP BY fc.nature, fc.care_level
 ORDER BY fc.nature, fc.care_level;
 \end{lstlisting}
 
-\textbf{Result:} Public facilities dominate high-complexity care (levels 3--4); private facilities concentrate in lower-complexity (levels 1--2).
+\textbf{Result:} Public facilities dominate high-complexity care (levels 3--4); private facilities concentrate in lower-complexity (levels 1--2). A marginal ``Mixta'' category (15 facilities) also exists.
 
 \subsection{R4 --- Installed Capacity per Affiliate by Department}
 
 Uses CTEs with FULL OUTER JOIN to combine capacity and affiliation data by department.
 
-\textbf{Result:} Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages.
+\textbf{Result:} Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages. SIN DEPARTAMENTO (non-geolocalized records) is excluded from this analysis.
 
 \subsection{R5 --- Regime Distribution by Geographic Region}
 
@@ -461,7 +463,7 @@ GROUP BY g.region, r.description
 ORDER BY g.region, total_affiliates DESC;
 \end{lstlisting}
 
-\textbf{Result:} Andina region concentrates the majority. Subsidized affiliates are proportionally higher in Pacifico and Amazonia.
+\textbf{Result:} Andina region concentrates the majority. Pacifico shows a strong Subsidized majority (driven by Valle del Cauca, Choc\'{o}, and Nari\~{n}o). Amazonia has the highest proportional Subsidized concentration.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Validation Results}
@@ -561,7 +563,7 @@ Development Env & Nix Flake\\
 
 \begin{enumerate}[nosep]
     \item \textbf{Temporal snapshot:} Both datasets are cross-sectional (Q2 2022 affiliates, Q4 2022 facilities). True trend analysis requires multiple periods.
-    \item \textbf{Care level gaps:} 61\% of facility records lack a care level. Missing values filled with 0 (``No reporta'').
+    \item \textbf{Care level gaps:} 61\% of facility records lack a care level. Missing values stored as NULL in the data warehouse.
     \item \textbf{Affiliation $\neq$ Access:} High affiliation rates do not guarantee effective healthcare access. The analysis measures enrollment, not utilization.
     \item \textbf{Capacity definition:} \texttt{capacity\_amount} represents installed capacity, not operational or effective capacity.
     \item \textbf{Cross-dataset caveat:} R4 uses Q4 2022 capacity with Q2 2022 affiliation. The ratio is indicative, not temporally precise.
@@ -575,7 +577,7 @@ This project demonstrates the complete lifecycle of an ETL process applied to Co
 
 \begin{enumerate}[nosep]
     \item \textbf{Data integration:} Two complementary datasets (SISPRO affiliates + REPS facilities) were integrated into a unified dimensional model with 7 dimension tables and 2 fact tables.
-    \item \textbf{Data quality:} Eight critical data quality issues were identified and resolved, including silent data loss from special health districts, missing department codes, duplicate capacity rows, and the ``NO APLICA'' gap affecting 57\% of the Especial regime.
+    \item \textbf{Data quality:} Eleven critical data quality issues were identified and resolved, including silent data loss from special health districts, missing department codes, duplicate capacity rows, the ``NO APLICA'' gap, and the Valle del Cauca region mapping error.
     \item \textbf{Analytical coverage:} All five analytical requirements (R1--R5) are fully supported by the dimensional model and verified through SQL queries.
     \item \textbf{Zero data loss:} Final validation confirms 100\% sum consistency (51,182,238 affiliates), 0 FK violations, 0 duplicate keys, and 0 negative measures.
     \item \textbf{BI readiness:} The data warehouse is accessible via PostgreSQL connection or CSV export for Power BI dashboard creation.
