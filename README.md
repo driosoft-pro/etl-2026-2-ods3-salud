@@ -18,7 +18,9 @@ This analysis focuses on two complementary dimensions of healthcare access:
 Understanding the relationship between affiliation density and infrastructure capacity is essential for identifying underserved regions and informing resource allocation decisions.
 
 **Geographic scope:** National (33 departments + Bogotá D.C.), across all municipalities.
+
 **Population of interest:** Affiliates of the Colombian healthcare system and healthcare facilities (IPS).
+
 **Potential stakeholders:** Ministry of Health and Social Protection (Minsalud), departmental health secretaries, EPS (healthcare promoting entities), hospital managers, healthcare policy researchers.
 
 ---
@@ -357,7 +359,6 @@ Source CSVs → Extract → Raw Validate → Transform → Validate → Load →
 | **R4** — Capacity per affiliate | dim_facility, dim_geografia, dim_department | capacity_amount, numero_afiliados | capacity_amount / numero_afiliados ratio by department | Yes |
 | **R5** — Regime × Geography | dim_regime, dim_geografia, dim_department | numero_afiliados | Subsidized vs Contributory distribution across departments | Yes |
 
-All five requirements are fully supported by the dimensional model.
 
 ---
 
@@ -575,6 +576,8 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 | `fact_capacity.csv` | 31,496 | Capacity records by facility and type |
 
 > **Note:** Dashboard screenshots are saved in `visualizations/`. Source diagrams are in `diagrams/`.
+
+![Power BI Dashboard](visualizations/dashboard.png)
 
 ---
 
@@ -1049,7 +1052,7 @@ This automatically sets up Python 3.12, PostgreSQL, Docker/Podman, Jupyter, and 
 |---|---|---|
 | Deyton Riascos Ortiz | Project Manager | Coordinate the project, organize tasks, consolidate the final report, and prepare the presentation |
 | Samuel Izquierdo Bonilla | Development Team | Lead the definition of requirements, user stories, KPIs, and data mapping |
-| Daniel David Garcia Restrepo | Product Owner | Prioritize requirements, validate that responses meet client needs, and review business objectives |
+| Daniel David Garcia Restrepo | Development Team | Prioritize requirements, validate that responses meet client needs, and review business objectives |
 | Mauricio Taborda Gongora | Tester | Validate data quality, verify ETL results, perform integration and unit testing |
 
 ---
@@ -1121,6 +1124,7 @@ pip install -r requirements.txt
 psql -U postgres -c "CREATE DATABASE salud_colombia;"
 psql -U postgres -c "CREATE USER etl_user WITH PASSWORD 'etl_password_2026';"
 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE salud_colombia TO etl_user;"
+psql -U postgres -d salud_colombia -c "GRANT USAGE, CREATE ON SCHEMA public TO etl_user;"
 psql -U etl_user -d salud_colombia -f sql/init.sql
 python -m src.etl_main
 ```
