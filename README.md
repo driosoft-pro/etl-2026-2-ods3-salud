@@ -60,7 +60,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 |---|---|---|
 | **Source** | SISPRO — Sistema Integrado de Información de la Protección Social | REPS — Registro Especial de Prestadores de Servicios de Salud |
 | **Institution / Owner** | Ministerio de Salud y Protección Social (Minsalud) | Ministerio de Salud y Protección Social (Minsalud) |
-| **URL** | https://www.datos.gov.co/Salud-y-Protecci-n-Social/Afiliados-por-departamento-municipio-y-regimen/ | https://www.datos.gov.co/Salud-y-Protecci-n-Social/Prestadores-de-Servicios-de-Salud/ |
+| **URL** | https://www.datos.gov.co/Salud-y-Protecci-n-Social/Relaci-n-de-IPS-p-blicas-y-privadas-seg-n-el-nivel/s2ru-bqt6/about_data  | https://www.datos.gov.co/Salud-y-Protecci-n-Social/N-mero-de-afiliados-por-departamento-municipio-y-r/hn4i-593p/about_data  |
 | **Mechanism** | CSV download from Datos Abiertos Colombia | CSV download from Datos Abiertos Colombia |
 | **Format** | CSV (comma-separated, period as thousand separator) | CSV (comma-separated) |
 | **Records** | 3,369 rows | 41,427 rows |
