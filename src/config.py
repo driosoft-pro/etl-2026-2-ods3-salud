@@ -48,7 +48,7 @@ DEPT_NORMALIZE = {
     'BOGOTA D.C.': 'BOGOTA D.C.',
     'BOGOTA D.C': 'BOGOTA D.C.',
     'BOGOTA': 'BOGOTA D.C.',
-    'NO APLICA': None,
+    'NO APLICA': 'SIN DEPARTAMENTO',
 }
 
 # Distritos Especiales de Salud: REPS los reporta como "departamento",
@@ -100,6 +100,7 @@ DEPT_DANE_CODES = {
     'VICHADA': '99',
     'SAN ANDRES': '88',
     'ARAUCA': '81',
+    'SIN DEPARTAMENTO': '00',
 }
 
 REGION_MAP = {
@@ -126,6 +127,7 @@ REGION_MAP = {
     'CHOCO': 'Pacifico',
     'VALLE DEL CAUCA': 'Pacifico',
     'NARINO': 'Pacifico',
+    'CAUCA': 'Pacifico',
     'ATLANTICO': 'Caribe',
     'BOLIVAR': 'Caribe',
     'CESAR': 'Caribe',
@@ -135,4 +137,5 @@ REGION_MAP = {
     'SUCRE': 'Caribe',
     'SAN ANDRES': 'Insular',
     'BOGOTA D.C.': 'Andina',
+    'SIN DEPARTAMENTO': 'No geolocalizado',
 }

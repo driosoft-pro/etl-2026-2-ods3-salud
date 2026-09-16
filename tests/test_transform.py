@@ -119,7 +119,7 @@ class TestDimGeografia:
     
     def test_region_values(self):
         valid_regions = {'Amazonia', 'Orinoquia', 'Andina', 'Pacifico',
-                         'Caribe', 'Insular', 'Sin Region'}
+                         'Caribe', 'Insular', 'Sin Region', 'No geolocalizado'}
         actual = set(self.dim['region'].unique())
         assert actual <= valid_regions, f"Unexpected regions: {actual - valid_regions}"
     
@@ -150,7 +150,7 @@ class TestDimDepartment:
     def test_has_region(self):
         assert 'region' in self.dim.columns
         valid_regions = {'Amazonia', 'Orinoquia', 'Andina', 'Pacifico',
-                         'Caribe', 'Insular', 'Sin Region'}
+                         'Caribe', 'Insular', 'Sin Region', 'No geolocalizado'}
         actual = set(self.dim['region'].unique())
         assert actual <= valid_regions, f"Unexpected regions: {actual - valid_regions}"
 

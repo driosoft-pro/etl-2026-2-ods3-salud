@@ -1,6 +1,7 @@
 import logging
 import sys
 import os
+import pandas as pd
 from .extract import extract_all
 from .transform import (
     clean_affiliates, clean_facilities,
@@ -31,10 +32,13 @@ def run_etl():
         raw_data = extract_all()
         
         logger.info("PHASE 2: TRANSFORMATION")
+        raw_total = pd.to_numeric(
+            raw_data['affiliates']['num_persons'].str.replace('.', '', regex=False),
+            errors='coerce'
+        ).fillna(0).sum()
+        
         df_affiliates = clean_affiliates(raw_data['affiliates'])
         df_facilities = clean_facilities(raw_data['facilities'])
-        
-        original_total = df_affiliates['num_persons'].sum()
         
         logger.info("Building dimensions...")
         dim_time = build_dim_time(df_affiliates, df_facilities)
@@ -53,7 +57,7 @@ def run_etl():
         validations = run_all_validations(
             fact_affiliates, fact_capacity,
             dim_time, dim_geografia, dim_regime, dim_facility, dim_capacity_type,
-            original_total=original_total,
+            original_total=raw_total,
             raw_facility_count=df_facilities['provider_code'].nunique()
         )
         total_errors = sum(len(v) for v in validations.values())
