@@ -506,14 +506,14 @@ After the full ETL pipeline execution, the following results confirm data integr
 | Table | Records | Description |
 |---|---|---|
 | dim_time | 2 | Q2 2022 (affiliates) + Q4 2022 (facilities) |
-| dim_geografia | 2,239 | All municipalities with DANE codes and region |
+| dim_geografia | 2,225 | All municipalities with DANE codes and region |
 | dim_department | 33 | All 32 departments + Bogotá D.C. |
-| dim_municipality | 1,167 | Municipalities from affiliates + facility-only municipalities |
+| dim_municipality | 1,164 | Municipalities from affiliates + facility-only municipalities |
 | dim_regime | 4 | Subsidized, Contributory, Special, Individual |
-| dim_facility | 10,921 | Unique healthcare providers (IPS) |
+| dim_facility | 10,902 | Unique healthcare providers (IPS) |
 | dim_capacity_type | 63 | CAMAS/SALAS × TPR/Adultos/Pediátrica combinations |
-| fact_affiliates | 3,367 | Quarterly granularity (quarter + municipality + regime) |
-| fact_facility_capacity | 31,496 | Aggregated by facility + capacity type (deduplicated) |
+| fact_affiliates | 3,369 | Quarterly granularity (quarter + municipality + regime) |
+| fact_facility_capacity | 41,427 | Capacity rows per facility + capacity type |
 
 ### Validation Results
 
@@ -523,7 +523,7 @@ After the full ETL pipeline execution, the following results confirm data integr
 | FK nulls (fact_facility_capacity) | 0 |
 | Negative measures | 0 |
 | Duplicate fact keys | 0 |
-| Sum consistency (affiliates) | 49,866,537 = 49,866,537 (100% match) |
+| Sum consistency (affiliates) | 51,182,238 = 51,182,238 (100% match) |
 | Unmapped municipalities | 0 |
 | Total validation errors | **0** |
 
@@ -534,8 +534,11 @@ After the full ETL pipeline execution, the following results confirm data integr
 | 5,072 facility rows silently dropped | Special health districts (Cali, Cartagena, Barranquilla, Santa Marta, Buenaventura) reported as "department" in REPS | `DISTRICT_TO_DEPT` mapping in `config.py` redirects to real departments |
 | 80 municipalities unmapped | CAUCA missing from `DEPT_DANE_CODES`; facility-only municipalities not in affiliates dataset | Added CAUCA (code 19); `build_dim_municipality` now merges both datasets |
 | 13,970 duplicate fact keys | Raw REPS data has duplicate rows per facility + capacity type | `build_fact_facility_capacity` now aggregates with `groupby().sum()` |
+| 1,315,701 affiliates lost ("NO APLICA") | `DEPT_NORMALIZE['NO APLICA'] = None` caused silent drop | Map to "SIN DEPARTAMENTO" with DANE code "00"; `raw_total` computed before `clean_affiliates()` |
+| Cauca without region | CAUCA absent from `REGION_MAP` | Added `'CAUCA': 'Pacifico'` |
 | Validation false positive | `len(df_facilities)` compared total rows (41,427) against unique facilities (10,921) | Changed to `provider_code.nunique()` for apples-to-apples comparison |
 | CASANARE wrong DANE code | CASANARE had code 19 (duplicate with CAUCA) | Corrected to 85 |
+| Non-deterministic hash | Python `hash()` varies across runs | Replaced with `hashlib.md5()` |
 
 ---
 
@@ -878,7 +881,7 @@ etl-project-first-delivery/
 ├── data/
 │   ├── raw/                              # Source CSV files (preserved)
 │   └── processed/                        # ETL output: dimension & fact CSVs for Power BI
-├── diagrams/                             # Mermaid/star schema diagram sources
+├── diagrams/                             # Mermaid source + exported PNGs (star_schema, architecture, dashboard)
 ├── visualizations/                       # Dashboard screenshots
 ├── notebooks/
 │   └── 01_data_validation_cleanup.ipynb  # Jupyter profiling notebook
@@ -894,9 +897,7 @@ etl-project-first-delivery/
 │   ├── init.sql                          # DW schema (DDL)
 │   └── analytical_queries.sql            # R1–R5 analytical queries
 ├── docs/
-│   ├── architecture.png                  # System architecture diagram
-│   ├── star_schema.png                   # Star schema diagram
-│   └── dashboard.png                     # BI dashboard screenshot
+│   └── informe.tex                       # Project report (LaTeX)
 ├── README.md
 ├── requirements.txt
 └── .gitignore
