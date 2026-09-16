@@ -23,6 +23,8 @@ def clean_affiliates(df: pd.DataFrame) -> pd.DataFrame:
     df['municipality'] = df['municipality'].apply(normalize_text)
     
     df['department'] = df['department'].map(lambda x: DEPT_NORMALIZE.get(x, x))
+    df['department_code'] = df['department'].map(DEPT_DANE_CODES)
+    df.loc[df['department'] == 'SIN DEPARTAMENTO', 'municipality_code'] = '00000'
     df = df.dropna(subset=['department'])
     
     df = df[df['num_persons'] > 0].copy()
