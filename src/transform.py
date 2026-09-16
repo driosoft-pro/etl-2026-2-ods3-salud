@@ -41,7 +41,8 @@ def clean_facilities(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Cleaning facilities dataset...")
     df = df.copy()
     
-    df['care_level'] = pd.to_numeric(df['care_level'], errors='coerce').fillna(0).astype(int)
+    care_level_raw = pd.to_numeric(df['care_level'], errors='coerce')
+    df['care_level'] = care_level_raw.astype(object).where(care_level_raw.notna(), other=None)
     df['installed_capacity'] = pd.to_numeric(df['installed_capacity'], errors='coerce').fillna(0).astype(int)
     
     df['nit'] = df['nit'].str.replace(',', '', regex=False)

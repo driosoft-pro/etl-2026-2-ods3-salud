@@ -393,6 +393,8 @@ Validation false positive & \texttt{len(df)} compared total rows vs unique facil
 Non-deterministic hash & Python \texttt{hash()} varies across runs & Replaced with \texttt{hashlib.md5()}\\
 \addlinespace
 Raw total computed post-clean & Validation compared against already-cleaned total & \texttt{raw\_total} computed before \texttt{clean\_affiliates()}\\
+\addlinespace
+29 facilities from AMAZONAS/GUAVIARE dropped & \texttt{DEPT\_DANE\_CODES} missing these departments & Added \texttt{'AMAZONAS': '91'}, \texttt{'GUAVIARE': '95'} + new \texttt{validate\_department\_consistency()}\\
 \bottomrule
 \end{tabularx}
 \caption{Data quality issues identified and resolved.}

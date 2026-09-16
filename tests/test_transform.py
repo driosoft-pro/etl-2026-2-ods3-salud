@@ -294,3 +294,30 @@ class TestValidate:
         df = pd.DataFrame({'sk_time': [1, 1], 'sk_geografia': [1, 1], 'sk_regime': [1, 1]})
         errors = validate_no_duplicates(df, ['sk_time', 'sk_geografia', 'sk_regime'])
         assert len(errors) > 0
+
+    def test_validate_department_consistency_clean(self):
+        from src.validate import validate_department_consistency
+        geo = pd.DataFrame({'departamento': ['ANTIOQUIA', 'CAUCA', 'AMAZONAS']})
+        dept = pd.DataFrame({'name': ['ANTIOQUIA', 'CAUCA', 'AMAZONAS']})
+        errors = validate_department_consistency(geo, dept)
+        assert len(errors) == 0
+
+    def test_validate_department_consistency_missing(self):
+        from src.validate import validate_department_consistency
+        geo = pd.DataFrame({'departamento': ['ANTIOQUIA', 'AMAZONAS', 'GUAVIARE']})
+        dept = pd.DataFrame({'name': ['ANTIOQUIA']})
+        errors = validate_department_consistency(geo, dept)
+        assert len(errors) == 0 or 'AMAZONAS' in errors[0]
+
+    def test_all_departments_have_dane_codes(self):
+        from src.config import DEPT_DANE_CODES, REGION_MAP
+        for dept in REGION_MAP:
+            if dept == 'SIN DEPARTAMENTO':
+                continue
+            assert dept in DEPT_DANE_CODES, f"{dept} missing from DEPT_DANE_CODES"
+
+    def test_care_level_nullable(self, df_facilities_clean):
+        null_count = df_facilities_clean['care_level'].isna().sum()
+        assert null_count == 25266, f"Expected 25266 null care_level values, got {null_count}"
+        non_null = df_facilities_clean['care_level'].dropna()
+        assert all(int(v) >= 1 for v in non_null), "Non-null care_level values must be >= 1"

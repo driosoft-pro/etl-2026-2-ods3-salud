@@ -77,6 +77,8 @@ DEPT_DANE_CODES = {
     'CALDAS': '17',
     'CAQUETA': '18',
     'CAUCA': '19',
+    'AMAZONAS': '91',
+    'GUAVIARE': '95',
     'CASANARE': '85',
     'CESAR': '20',
     'CHOCO': '27',

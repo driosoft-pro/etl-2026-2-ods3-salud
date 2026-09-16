@@ -494,6 +494,7 @@ ORDER BY g.region, total_affiliates DESC;
 | **Business Rules** | NumPersonas > 0; valid regime codes (S, C, E, I) | Enforced during transform; validated in `validate_raw_affiliates()` |
 | **Reconciliation** | Sum of fact measure matches source total within 1% | `validate_sum_consistency()` compares fact total vs. source sum |
 | **Row Count Recovery** | Unique facilities in fact table match source unique facilities | `validate_row_count()` with `nunique('sk_facility')` vs `provider_code.nunique()` |
+| **Department Consistency** | Every department in dim_geografia exists in dim_department | `validate_department_consistency()` cross-checks both dimensions |
 
 ---
 
@@ -506,14 +507,14 @@ After the full ETL pipeline execution, the following results confirm data integr
 | Table | Records | Description |
 |---|---|---|
 | dim_time | 2 | Q2 2022 (affiliates) + Q4 2022 (facilities) |
-| dim_geografia | 2,225 | All municipalities with DANE codes and region |
-| dim_department | 33 | All 32 departments + Bogotá D.C. |
-| dim_municipality | 1,164 | Municipalities from affiliates + facility-only municipalities |
+| dim_geografia | 2,240 | All municipalities with DANE codes and region |
+| dim_department | 34 | All 32 departments + Bogotá D.C. + SIN DEPARTAMENTO |
+| dim_municipality | 1,168 | Municipalities from affiliates + facility-only municipalities |
 | dim_regime | 4 | Subsidized, Contributory, Special, Individual |
-| dim_facility | 10,902 | Unique healthcare providers (IPS) |
+| dim_facility | 10,921 | Unique healthcare providers (IPS) |
 | dim_capacity_type | 63 | CAMAS/SALAS × TPR/Adultos/Pediátrica combinations |
 | fact_affiliates | 3,369 | Quarterly granularity (quarter + municipality + regime) |
-| fact_facility_capacity | 41,427 | Capacity rows per facility + capacity type |
+| fact_facility_capacity | 31,496 | Capacity rows per facility + capacity type (deduplicated) |
 
 ### Validation Results
 
@@ -539,6 +540,7 @@ After the full ETL pipeline execution, the following results confirm data integr
 | Validation false positive | `len(df_facilities)` compared total rows (41,427) against unique facilities (10,921) | Changed to `provider_code.nunique()` for apples-to-apples comparison |
 | CASANARE wrong DANE code | CASANARE had code 19 (duplicate with CAUCA) | Corrected to 85 |
 | Non-deterministic hash | Python `hash()` varies across runs | Replaced with `hashlib.md5()` |
+| 29 facilities from AMAZONAS/GUAVIARE dropped | `DEPT_DANE_CODES` missing these two departments | Added `'AMAZONAS': '91'`, `'GUAVIARE': '95'` + new `validate_department_consistency()` check |
 
 ---
 

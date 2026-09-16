@@ -57,6 +57,7 @@ def run_etl():
         validations = run_all_validations(
             fact_affiliates, fact_capacity,
             dim_time, dim_geografia, dim_regime, dim_facility, dim_capacity_type,
+            dim_department=dim_department,
             original_total=raw_total,
             raw_facility_count=df_facilities['provider_code'].nunique()
         )
