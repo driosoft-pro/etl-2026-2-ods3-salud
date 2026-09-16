@@ -9,7 +9,7 @@ from .transform import (
     build_dim_regime, build_dim_facility, build_dim_capacity_type,
     build_fact_affiliates, build_fact_facility_capacity
 )
-from .validate import run_all_validations
+from .validate import run_all_validations, validate_raw_affiliates
 from .load import load_all, export_to_csv
 
 logging.basicConfig(
@@ -30,6 +30,14 @@ def run_etl():
     try:
         logger.info("PHASE 1: EXTRACTION")
         raw_data = extract_all()
+        
+        logger.info("PHASE 1.5: RAW VALIDATION")
+        raw_errors = validate_raw_affiliates(raw_data['affiliates'])
+        if raw_errors:
+            for e in raw_errors:
+                logger.error(f"  [raw_affiliates] {e}")
+            raise ValueError(f"Raw validation failed with {len(raw_errors)} errors")
+        logger.info("Raw validation passed")
         
         logger.info("PHASE 2: TRANSFORMATION")
         raw_total = pd.to_numeric(

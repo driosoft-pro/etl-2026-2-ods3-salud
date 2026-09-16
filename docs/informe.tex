@@ -303,10 +303,9 @@ These represent fundamentally different business processes (enrollment vs.\ infr
 The pipeline follows a linear flow:
 
 \begin{lstlisting}
-Source CSVs -> Extract (extract.py) -> Transform (transform.py) ->
-Validate (validate.py) -> Load (load.py) -> PostgreSQL DW
-                                                    |
-                                              CSV Export -> data/processed/
+Source CSVs -> Extract -> Raw Validate -> Transform -> Validate -> Load -> PostgreSQL DW
+                                                                            |
+                                                                      CSV Export -> data/processed/
 \end{lstlisting}
 
 \subsection{Extract (\texttt{src/extract.py})}
@@ -314,6 +313,15 @@ Validate (validate.py) -> Load (load.py) -> PostgreSQL DW
 \begin{itemize}[nosep]
     \item Reads raw CSV files with \texttt{pd.read\_csv(dtype=str)} to preserve original formatting.
     \item Renames columns from Spanish to English for consistency.
+\end{itemize}
+
+\subsection{Raw Validation (\texttt{src/validate.py})}
+
+Validates the raw extracted data before any transformation:
+\begin{itemize}[nosep]
+    \item Verifies all required columns are present.
+    \item Checks that \texttt{NumPersonas} contains no negative values.
+    \item Validates regime codes are within \{S, C, E, I\}.
 \end{itemize}
 
 \subsection{Transform (\texttt{src/transform.py})}
@@ -344,6 +352,7 @@ Validate (validate.py) -> Load (load.py) -> PostgreSQL DW
 \toprule
 \textbf{Rule} & \textbf{Description}\\
 \midrule
+Raw Validation & Validates raw data before transformation: required columns, no negative \texttt{NumPersonas}, valid regime codes (S/C/E/I)\\
 FK Integrity & All foreign keys in fact tables reference existing dimension surrogate keys\\
 Null Measures & No null values in \texttt{numero\_afiliados} or \texttt{capacity\_amount}\\
 Negative Measures & No negative values in measure columns\\

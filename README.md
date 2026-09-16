@@ -161,7 +161,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 | **NIT with commas** | Remove commas from NIT strings | Standardize identifier format for dimension matching |
 | **Phone number formatting** | Extract numeric digits only using regex | Normalize inconsistent phone formats for dimension storage |
 | **Department name normalization** | Uppercase, remove accents (NFKD), map aliases (e.g., "VALLE" → "VALLE DEL CAUCA") | Ensure consistent department names across datasets for joins |
-| **"NO APLICA" department** | Drop rows where department = "NO APLICA" | Records with no geographic assignment cannot be mapped to dimensions |
+| **"NO APLICA" department** | Map to "SIN DEPARTAMENTO" with DANE code "00" (preserves 1,315,701 affiliates) | Records without geographic assignment are retained for sum consistency; synthetic code "00" allows traceability |
 | **Zero affiliates** | Drop rows where NumPersonas ≤ 0 | Zero-count records do not contribute to analytical value |
 | **Missing care level (61% null)** | Store as NULL (nullable integer) | Care level is not critical for capacity analysis; NULL preserves data integrity without introducing artificial categories |
 | **Duplicate facility rows** | Keep unique (provider_code, municipality) combinations | Each facility appears once in dim_facility; capacity types are separate entries |
@@ -299,9 +299,9 @@ These represent fundamentally different business processes (enrollment vs. infra
 ### 10.1 Architecture
 
 ```
-Source CSVs → Extract (extract.py) → Transform (transform.py) → Validate (validate.py) → Load (load.py) → PostgreSQL DW
-                                                                                                    ↓
-                                                                                              CSV Export → data/processed/
+Source CSVs → Extract → Raw Validate → Transform → Validate → Load → PostgreSQL DW
+                 (extract.py)  (validate.py)  (transform.py) (validate.py) (load.py)      ↓
+                                                                                    CSV Export → data/processed/
 ```
 
 ### 10.2 Extract (`src/extract.py`)
@@ -329,6 +329,7 @@ Source CSVs → Extract (extract.py) → Transform (transform.py) → Validate (
 
 | Rule | Description |
 |---|---|
+| **Raw Validation** | Validates raw data before transformation: required columns, no negative NumPersonas, valid regime codes (S/C/E/I) |
 | **FK Integrity** | All foreign keys in fact tables reference existing surrogate keys in dimension tables |
 | **Null Measures** | No null values in measure columns (`numero_afiliados`, `capacity_amount`) |
 | **Negative Measures** | No negative values in measure columns |
@@ -612,23 +613,32 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 │   extract.py        │
 │   Read CSV → DF     │
 │   Rename columns    │
-│   Map regions       │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   2. PROFILING /    │
+│   2. RAW VALIDATION │
+│   validate.py       │
+│   Column check      │
+│   Regime codes      │
+│   Negative values   │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│   3. PROFILING /    │
 │      PREPARATION    │
 │   transform.py      │
 │   Clean text        │
 │   Parse numbers     │
+│   Normalize depts   │
+│   Map regions       │
 │   Handle nulls      │
-│   Remove dupes      │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   3. DIMENSIONAL    │
+│   4. DIMENSIONAL    │
 │      TRANSFORMATION │
 │   transform.py      │
 │   Build dimensions  │
@@ -638,7 +648,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   4. VALIDATION     │
+│   5. VALIDATION     │
 │   validate.py       │
 │   FK integrity      │
 │   Null checks       │
@@ -647,7 +657,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   5. LOAD           │
+│   6. LOAD           │
 │   load.py           │
 │   PostgreSQL DW     │
 │   Single transaction│
@@ -655,7 +665,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   6. CSV EXPORT     │
+│   7. CSV EXPORT     │
 │   load.py           │
 │   data/processed/   │
 │   dim_*.csv         │
@@ -664,7 +674,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   7. SQL / KPIs     │
+│   8. SQL / KPIs     │
 │   analytical_queries│
 │   R1–R5 queries     │
 │   Metrics & KPIs    │
@@ -672,15 +682,15 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   8. BI / DASHBOARD │
-│   Power BI          │
-│   Connects to DW    │
-│   Maps, KPIs, Filters│
+│   9. BI / DASHBOARD │
+│   Power BI            │
+│   Connects to DW      │
+│   Maps, KPIs, Filters │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   9. INSIGHTS       │
+│   10. INSIGHTS      │
 │   Interpretation    │
 │   Decision Support  │
 └─────────────────────┘
