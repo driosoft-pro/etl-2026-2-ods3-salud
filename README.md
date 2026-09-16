@@ -703,6 +703,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 psql -U postgres -c "CREATE DATABASE salud_colombia;"
 psql -U postgres -c "CREATE USER etl_user WITH PASSWORD 'etl_password_2026';"
 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE salud_colombia TO etl_user;"
+psql -U postgres -d salud_colombia -c "GRANT USAGE, CREATE ON SCHEMA public TO etl_user;"
 
 # 2. Install Python dependencies
 pip install -r requirements.txt
