@@ -557,8 +557,22 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 - **Filters:** By department, region, regime type, facility nature, and time period.
 
 **Data Loading Options for Power BI:**
-1. **PostgreSQL connection** (recommended): Direct connection to the Data Warehouse using the PostgreSQL connector.
-2. **CSV import**: Alternative — load individual CSV files from `data/processed/` (dim_time.csv, dim_geografia.csv, fact_affiliates.csv, etc.). Each CSV includes surrogate keys for joining tables in Power BI.
+1. **PostgreSQL connection** (recommended): Direct connection to the Data Warehouse using the PostgreSQL connector. See "Connecting Power BI (Windows VM) to PostgreSQL (Linux Host)" below for VM setup instructions.
+2. **CSV import**: Alternative — load individual CSV files from `data/processed/`. Each CSV includes surrogate keys for joining tables in Power BI.
+
+**CSV files available in `data/processed/`:**
+
+| File | Records | Content |
+|------|---------|---------|
+| `dim_time.csv` | 2 | Q2 2022 (affiliates) + Q4 2022 (facilities) |
+| `dim_geografia.csv` | 2,240 | Municipalities with DANE codes and region |
+| `dim_department.csv` | 34 | All departments with region |
+| `dim_municipality.csv` | 1,168 | Municipalities linked to departments |
+| `dim_regime.csv` | 4 | Subsidized, Contributory, Special, Individual |
+| `dim_facility.csv` | 10,921 | Healthcare providers (IPS) with attributes |
+| `dim_capacity_type.csv` | 63 | CAMAS/SALAS × TPR/Adultos/Pediátrica |
+| `fact_affiliates.csv` | 3,369 | Quarterly affiliate counts by municipality/regime |
+| `fact_capacity.csv` | 31,496 | Capacity records by facility and type |
 
 > **Note:** Dashboard screenshots are saved in `visualizations/`. Source diagrams are in `diagrams/`.
 
@@ -602,87 +616,87 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 
 ```
 ┌─────────────────────┐
-│   Source Datasets    │
-│  (SISPRO / REPS)    │
-│  CSV on datos.gov.co│
+│   Source Datasets     │
+│  (SISPRO / REPS)      │
+│  CSV on datos.gov.co  │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   1. EXTRACTION     │
-│   extract.py        │
-│   Read CSV → DF     │
-│   Rename columns    │
+│   1. EXTRACTION       │
+│   extract.py          │
+│   Read CSV → DF       │
+│   Rename columns      │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   2. RAW VALIDATION │
-│   validate.py       │
-│   Column check      │
-│   Regime codes      │
-│   Negative values   │
+│   2. RAW VALIDATION   │
+│   validate.py         │
+│   Column check        │
+│   Regime codes        │
+│   Negative values     │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   3. PROFILING /    │
-│      PREPARATION    │
-│   transform.py      │
-│   Clean text        │
-│   Parse numbers     │
-│   Normalize depts   │
-│   Map regions       │
-│   Handle nulls      │
+│   3. PROFILING /      │
+│      PREPARATION      │
+│   transform.py        │
+│   Clean text          │
+│   Parse numbers       │
+│   Normalize depts     │
+│   Map regions         │
+│   Handle nulls        │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   4. DIMENSIONAL    │
-│      TRANSFORMATION │
-│   transform.py      │
-│   Build dimensions  │
-│   Build fact tables │
-│   Surrogate keys    │
+│   4. DIMENSIONAL      │
+│      TRANSFORMATION   │
+│   transform.py        │
+│   Build dimensions    │
+│   Build fact tables   │
+│   Surrogate keys      │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   5. VALIDATION     │
-│   validate.py       │
-│   FK integrity      │
-│   Null checks       │
-│   Sum reconciliation│
+│   5. VALIDATION       │
+│   validate.py         │
+│   FK integrity        │
+│   Null checks         │
+│   Sum reconciliation  │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   6. LOAD           │
-│   load.py           │
-│   PostgreSQL DW     │
-│   Single transaction│
+│   6. LOAD             │
+│   load.py             │
+│   PostgreSQL DW       │
+│   Single transaction  │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   7. CSV EXPORT     │
-│   load.py           │
-│   data/processed/   │
-│   dim_*.csv         │
-│   fact_*.csv        │
+│   7. CSV EXPORT       
+│   load.py             
+│   data/processed/     
+│   dim_*.csv           
+│   fact_*.csv          
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   8. SQL / KPIs     │
-│   analytical_queries│
-│   R1–R5 queries     │
-│   Metrics & KPIs    │
+│   8. SQL / KPIs       │
+│   analytical_queries  │
+│   R1–R5 queries       │
+│   Metrics & KPIs      │
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│   9. BI / DASHBOARD │
+│   9. BI / DASHBOARD   │
 │   Power BI            │
 │   Connects to DW      │
 │   Maps, KPIs, Filters │
@@ -690,9 +704,9 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
           │
           ▼
 ┌─────────────────────┐
-│   10. INSIGHTS      │
-│   Interpretation    │
-│   Decision Support  │
+│   10. INSIGHTS        │
+│   Interpretation      │
+│   Decision Support    │
 └─────────────────────┘
 ```
 
@@ -789,6 +803,73 @@ podman-compose logs etl
 podman-compose down -v
 ```
 
+### ETL Pipeline Output
+
+When you run the ETL pipeline, you should see the following output:
+
+```
+============================================================
+  ETL Salud Colombia — Warehouse Dimensional
+============================================================
+
+PHASE 1: EXTRACTION
+[EXTRACT] Extracting affiliates from: data/raw/affiliates_by_department_municipality_regime_20260906.csv
+[EXTRACT] Records extracted: 3369
+[EXTRACT] Extracting facilities from: data/raw/healthcare_facilities_by_level_capacity_20260906.csv
+[EXTRACT] Records extracted: 41427
+
+PHASE 1.5: RAW VALIDATION
+[VALIDATE] Raw validation passed
+
+PHASE 2: TRANSFORMATION
+[TRANSFORM] Cleaning affiliates dataset...
+[TRANSFORM] Records after cleaning: 3369
+[TRANSFORM] Cleaning facilities dataset...
+[TRANSFORM] Records after cleaning: 41427
+[TRANSFORM] Building dimensions...
+[TRANSFORM] Time dimension records: 2
+[TRANSFORM] Geography dimension records: 2240
+[TRANSFORM] Department dimension records: 34
+[TRANSFORM] Municipality dimension records: 1168
+[TRANSFORM] Regime dimension records: 4
+[TRANSFORM] Facility dimension records: 10921
+[TRANSFORM] Capacity type dimension records: 63
+[TRANSFORM] Building fact tables...
+[TRANSFORM] Affiliates fact records (quarterly): 3369
+[TRANSFORM] Facility capacity fact records: 31496
+
+PHASE 2.5: VALIDATION
+[VALIDATE] All validations passed successfully
+
+PHASE 3: LOADING
+[LOAD] Schema reset from init.sql
+[LOAD] Loading dimension dim_time: 2 records
+[LOAD] Loading dimension dim_department: 34 records
+[LOAD] Loading dimension dim_municipality: 1168 records
+[LOAD] Loading dimension dim_regime: 4 records
+[LOAD] Loading dimension dim_geografia: 2240 records
+[LOAD] Loading dimension dim_facility: 10921 records
+[LOAD] Loading dimension dim_capacity_type: 63 records
+[LOAD] Loading fact table fact_affiliates: 3369 records
+[LOAD] Loading fact table fact_facility_capacity: 31496 records
+[LOAD] Load completed successfully
+
+PHASE 4: CSV EXPORT
+[EXPORT] Exported dim_time: 2 records
+[EXPORT] Exported dim_geografia: 2240 records
+[EXPORT] Exported dim_department: 34 records
+[EXPORT] Exported dim_municipality: 1168 records
+[EXPORT] Exported dim_regime: 4 records
+[EXPORT] Exported dim_facility: 10921 records
+[EXPORT] Exported dim_capacity_type: 63 records
+[EXPORT] Exported fact_affiliates: 3369 records
+[EXPORT] Exported fact_capacity: 31496 records
+
+============================================================
+  ETL PROCESS COMPLETED SUCCESSFULLY
+============================================================
+```
+
 ### Environment Variables
 
 | Variable | Default | Description |
@@ -827,6 +908,91 @@ DBeaver is a free, universal database tool used to visualize and query the Data 
    - Execute with Ctrl+Enter
 
 > **Note:** If using Docker, the PostgreSQL port is exposed on `5432` by default. If that port is already in use, change the mapping in `docker-compose.yml` (e.g., `"5433:5432"`) and update `DB_PORT` in your `.env` file.
+
+### Connecting Power BI (Windows VM) to PostgreSQL (Linux Host)
+
+If you are running Power BI Desktop on a Windows virtual machine and PostgreSQL is running on a Linux host (via Podman/Docker), follow these steps to establish the connection.
+
+#### Prerequisites
+
+- Power BI Desktop installed on the Windows VM
+- PostgreSQL running on the Linux host (via Podman/Docker)
+- Network connectivity between the VM and the Linux host
+
+#### Step 1: Find the Linux Host IP Address
+
+On the Linux host, run:
+
+```bash
+ip addr show virbr0 2>/dev/null || ip addr show | grep "inet " | grep -v 127.0.0.1
+```
+
+The default libvirt/virbr0 network IP is typically `192.168.122.1`.
+
+#### Step 2: Configure the Connection in Power BI
+
+1. Open **Power BI Desktop** on the Windows VM
+2. Click **Get Data** → **More...**
+3. Select **PostgreSQL database** and click **Connect**
+4. Enter the connection settings:
+
+| Setting | Value |
+|---------|-------|
+| **Server** | `<LINUX_HOST_IP>:5432` (e.g., `192.168.122.1:5432`) |
+| **Database** | `salud_colombia` |
+| **Data Connectivity mode** | `Import` (recommended for development) or `DirectQuery` |
+
+5. Click **OK**
+
+#### Step 3: Authenticate
+
+In the authentication dialog:
+
+| Tab | Setting | Value |
+|-----|---------|-------|
+| **Database** | Username | `etl_user` |
+| **Database** | Password | `etl_password_2026` |
+
+6. Click **Connect**
+
+#### Step 4: Handle SSL/Certificate Warnings
+
+If Windows prompts to install the Npgsql connector or reports missing SSL certificates:
+
+- Accept the warning for unencrypted connection on the internal virtual network
+- This is safe for local/development environments
+
+#### Step 5: Select Tables
+
+1. In the Navigator, expand the `public` schema
+2. Select the tables you want to import:
+
+| Table | Content |
+|-------|---------|
+| `dim_time` | Time periods (Q2 2022, Q4 2022) |
+| `dim_geografia` | Municipalities with DANE codes and region |
+| `dim_department` | 34 departments with region |
+| `dim_municipality` | 1,168 municipalities |
+| `dim_regime` | Regime types (Subsidized, Contributory, Special, Individual) |
+| `dim_facility` | 10,921 healthcare facilities (IPS) |
+| `dim_capacity_type` | 63 capacity types (CAMAS/SALAS × TPR/Adultos/Pediátrica) |
+| `fact_affiliates` | 3,369 affiliate records (quarterly granularity) |
+| `fact_facility_capacity` | 31,496 capacity records |
+
+3. Click **Load** or **Transform Data** if you need to clean the data first
+
+#### Connection Summary
+
+| Component | Value |
+|-----------|-------|
+| **Server IP** | `192.168.122.1` (default virbr0) or your host IP |
+| **Port** | `5432` |
+| **Database** | `salud_colombia` |
+| **Username** | `etl_user` |
+| **Password** | `etl_password_2026` |
+| **SSL Mode** | `Prefer` or `Disable` (for local VMs) |
+
+> **Note:** If the connection fails, ensure the PostgreSQL container is bound to `0.0.0.0:5432` (not just `127.0.0.1:5432`) so it accepts external connections. The `docker-compose.yml` in this project already configures this correctly.
 
 ---
 
