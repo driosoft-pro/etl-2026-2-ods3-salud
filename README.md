@@ -174,9 +174,9 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ## 8. Grain Declaration
 
-**One row in `fact_affiliates` represents** the total number of accumulated healthcare affiliates for a specific regime type (Subsidized, Contributory, Special, or Individual) in a specific municipality during a specific quarter (Q2 2022).
+**One row in `fact_affiliates` represents** the total number of accumulated healthcare affiliates for a specific regime type (Subsidized, Contributory, Special, or Individual) in a specific geography (municipality/department/region) during a specific quarter (Q2 2022).
 
-**One row in `fact_facility_capacity` represents** the installed capacity (beds, procedural rooms, or equipment) for a specific healthcare facility (IPS) and a specific capacity type at a point in time (Q4 2022 snapshot).
+**One row in `fact_facility_capacity` represents** the installed capacity (beds, procedural rooms, or equipment) for a specific healthcare facility (IPS), a specific capacity type, and a specific geography at a point in time (Q4 2022 snapshot).
 
 ---
 
@@ -184,115 +184,38 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ### 9.1 Star Schema
 
-```mermaid
-erDiagram
-    dim_time {
-        SERIAL sk_time PK
-        INTEGER year
-        INTEGER month
-        VARCHAR month_name
-        INTEGER quarter
-        INTEGER semester
-        VARCHAR periodo_codigo
-        DATE full_date
-    }
+The dimensional model was simplified to a unified 5-dimension star schema. Both fact tables reference a **single conformed geography dimension** (`dim_geografia`), which is enriched with API Colombia data (capital, surface, population, municipalities_count, phone_prefix, region_api).
 
-    dim_geografia {
-        SERIAL sk_geografia PK
-        VARCHAR codigo_dane_municipio
-        VARCHAR municipio
-        VARCHAR codigo_dane_depto
-        VARCHAR departamento
-        VARCHAR region
-    }
-
-    dim_department {
-        SERIAL sk_department PK
-        VARCHAR code
-        VARCHAR name
-        VARCHAR region
-    }
-
-    dim_municipality {
-        SERIAL sk_municipality PK
-        VARCHAR code
-        VARCHAR name
-        INTEGER sk_department FK
-    }
-
-    dim_regime {
-        SERIAL sk_regime PK
-        VARCHAR code
-        VARCHAR description
-    }
-
-    dim_facility {
-        SERIAL sk_facility PK
-        VARCHAR provider_code
-        VARCHAR name
-        VARCHAR nit
-        VARCHAR nature
-        INTEGER care_level
-        VARCHAR manager
-        VARCHAR address
-        VARCHAR email
-        VARCHAR phone
-        INTEGER sk_municipality FK
-    }
-
-    dim_capacity_type {
-        SERIAL sk_capacity_type PK
-        VARCHAR group
-        VARCHAR description
-    }
-
-    fact_affiliates {
-        SERIAL sk_affiliate PK
-        INTEGER sk_time FK
-        INTEGER sk_geografia FK
-        INTEGER sk_regime FK
-        BIGINT numero_afiliados
-    }
-
-    fact_facility_capacity {
-        SERIAL sk_capacity PK
-        INTEGER sk_time FK
-        INTEGER sk_facility FK
-        INTEGER sk_capacity_type FK
-        INTEGER capacity_amount
-    }
-
-    dim_municipality }o--|| dim_department : "sk_department"
-    dim_facility }o--|| dim_municipality : "sk_municipality"
-    fact_affiliates }o--|| dim_time : "sk_time"
-    fact_affiliates }o--|| dim_geografia : "sk_geografia"
-    fact_affiliates }o--|| dim_regime : "sk_regime"
-    fact_facility_capacity }o--|| dim_time : "sk_time"
-    fact_facility_capacity }o--|| dim_facility : "sk_facility"
-    fact_facility_capacity }o--|| dim_capacity_type : "sk_capacity_type"
-```
+![Star Schema](diagrams/starShema.png)
 
 ### 9.2 Dimension and Fact Justification
 
 | Table | Justification |
 |---|---|
 | **dim_time** | Temporal analysis is required by R1, R2, R4, R5. Quarterly granularity matches the data snapshot. Semester and year enable multi-level temporal roll-ups. |
-| **dim_geografia** | Geographic analysis required by R2, R4, R5. Includes DANE codes for official interoperability and region for regional grouping. |
-| **dim_department** | Department-level analysis required by R2, R4. Separate from dim_geografia to support the facility hierarchy (IPS → municipality → department). Includes region for regional capacity analysis. |
-| **dim_municipality** | Municipality-level granularity required for territorial equity analysis (R5). Links to department for hierarchical drilling. |
+| **dim_geografia** | **Conformed geography dimension** used by both fact tables. Includes DANE codes, municipality, department, region, and API Colombia enrichment (capital, surface, population, municipalities_count, phone_prefix, region_api). Eliminates redundant geographic tables. |
 | **dim_regime** | Regime type is the core analytical dimension for R1, R5. Maps S/C/E/I codes to descriptive names. |
-| **dim_facility** | Facility-level analysis required by R3, R4. Contains provider attributes (nature, care level, contact) for descriptive slicing. |
+| **dim_facility** | Facility-level analysis required by R3, R4. Contains provider attributes (nature, care level, contact) for descriptive slicing. References `dim_geografia` via `sk_geografia` FK. |
 | **dim_capacity_type** | Capacity types (CAMAS/SALAS × TPR/Adultos/Pediátrica) required for R3, R4 infrastructure analysis. |
-| **fact_affiliates** | Stores the measure `numero_afiliados` at the grain: quarter + municipality + regime. Supports R1, R2, R5. |
-| **fact_facility_capacity** | Stores the measure `capacity_amount` at the grain: facility + capacity type + time snapshot. Supports R3, R4. |
+| **fact_affiliates** | Stores the measure `numero_afiliados` at the grain: quarter + geography + regime. Supports R1, R2, R5. References `dim_geografia` directly. |
+| **fact_facility_capacity** | Stores the measure `capacity_amount` at the grain: facility + capacity type + geography + time snapshot. Supports R3, R4. References `dim_geografia` directly for geographic analysis. |
 
 ### 9.3 Why Two Fact Tables?
 
 The two fact tables have **different granularities**:
-- `fact_affiliates` is aggregated at (quarter, municipality, regime) — a many-to-many relationship between territory and regime.
-- `fact_facility_capacity` is at (facility, capacity type, time) — individual facility-level infrastructure data.
+- `fact_affiliates` is aggregated at (quarter, geography, regime) — a many-to-many relationship between territory and regime.
+- `fact_facility_capacity` is at (facility, capacity type, geography, time) — individual facility-level infrastructure data.
 
-These represent fundamentally different business processes (enrollment vs. infrastructure) and cannot be merged into a single fact table without losing analytical precision.
+Both reference the same conformed `dim_geografia` dimension directly, enabling cross-fact geographic analysis (e.g., capacity per affiliate by department) without duplicating geographic data.
+
+### 9.4 Normalization Changes (v3)
+
+| Change | Before (v2) | After (v3) | Rationale |
+|---|---|---|---|
+| Geography dimension | `dim_geografia` used by affiliates; `dim_department`/`dim_municipality` used by facilities; `dim_department_api` for API enrichment | **Single `dim_geografia`** used by both fact tables, enriched with API Colombia data | Eliminates geographic redundancy; API attributes (capital, surface, population) live directly in `dim_geografia` |
+| Removed tables | `dim_department`, `dim_municipality`, `dim_department_api` existed as separate dimensions | **Removed** — all geographic data unified in `dim_geografia` | Reduces schema complexity from 8 dimensions to 5; eliminates unnecessary hierarchy helpers |
+| `dim_facility` geography FK | Referenced `dim_municipality` | References `dim_geografia` via `sk_geografia` FK | Direct geographic linkage without intermediate municipality dimension |
+| `fact_facility_capacity` geography | Had `sk_geografia` FK through separate path | Direct `sk_geografia` FK to unified dimension | Simplified geographic analysis without joins through facility hierarchy |
 
 ---
 
@@ -300,11 +223,8 @@ These represent fundamentally different business processes (enrollment vs. infra
 
 ### 10.1 Architecture
 
-```
-Source CSVs → Extract → Raw Validate → Transform → Validate → Load → PostgreSQL DW
-                 (extract.py)  (validate.py)  (transform.py) (validate.py) (load.py)      ↓
-                                                                                    CSV Export → data/processed/
-```
+![Star Schema](diagrams/diagramArchitecture.png)
+
 
 ### 10.2 Extract (`src/extract.py`)
 - Reads raw CSV files with `pd.read_csv(dtype=str)` to preserve original formatting
@@ -322,10 +242,12 @@ Source CSVs → Extract → Raw Validate → Transform → Validate → Load →
 - Removes commas from NIT values
 
 **Dimensional Transformation:**
-- Builds 7 dimension tables with surrogate keys (`sk_*`)
+- Builds **5 dimension tables** with surrogate keys (`sk_*`): `dim_time`, `dim_geografia`, `dim_regime`, `dim_facility`, `dim_capacity_type`
+- Constructs unified `dim_geografia` from both affiliates and facilities datasets, enriched with API Colombia data (capital, surface, population, municipalities_count, phone_prefix, region_api)
+- `dim_facility` references `dim_geografia` via `sk_geografia` FK
 - Aggregates `fact_affiliates` to quarterly granularity
 - Maps facility composite keys (provider_code + municipality) to surrogate keys
-- Renames `installed_capacity` to `capacity_amount` to match SQL schema
+- Both fact tables reference `dim_geografia` directly for geographic analysis
 
 ### 10.4 Validate (`src/validate.py`)
 
@@ -354,10 +276,10 @@ Source CSVs → Extract → Raw Validate → Transform → Validate → Load →
 | Requirement | Dimension(s) | Measure(s) | Expected Query/KPI | Supported? |
 |---|---|---|---|---|
 | **R1** — Affiliates by regime | dim_regime, dim_time | numero_afiliados | Total affiliates grouped by regime description | Yes |
-| **R2** — Department density | dim_geografia, dim_department, dim_time | numero_afiliados | Top/bottom departments by total affiliates | Yes |
+| **R2** — Department density | dim_geografia, dim_time | numero_afiliados | Top/bottom departments by total affiliates | Yes |
 | **R3** — Facilities by nature/level | dim_facility, dim_capacity_type | capacity_amount | Count of facilities by nature; capacity by care level | Yes |
-| **R4** — Capacity per affiliate | dim_facility, dim_geografia, dim_department | capacity_amount, numero_afiliados | capacity_amount / numero_afiliados ratio by department | Yes |
-| **R5** — Regime × Geography | dim_regime, dim_geografia, dim_department | numero_afiliados | Subsidized vs Contributory distribution across departments | Yes |
+| **R4** — Capacity per affiliate | dim_facility, dim_geografia | capacity_amount, numero_afiliados | capacity_amount / numero_afiliados ratio by department | Yes |
+| **R5** — Regime × Geography | dim_regime, dim_geografia | numero_afiliados | Subsidized vs Contributory distribution across departments | Yes |
 
 
 ---
@@ -433,13 +355,12 @@ ORDER BY fc.nature, fc.care_level;
 ```sql
 WITH capacity_by_dept AS (
     SELECT
-        d.name AS department,
+        g.departamento AS department,
         SUM(c.capacity_amount) AS total_capacity
     FROM fact_facility_capacity c
-    JOIN dim_facility fc ON c.sk_facility = fc.sk_facility
-    JOIN dim_municipality m ON fc.sk_municipality = m.sk_municipality
-    JOIN dim_department d ON m.sk_department = d.sk_department
-    GROUP BY d.name
+    JOIN dim_geografia g ON c.sk_geografia = g.sk_geografia
+    WHERE g.departamento NOT IN ('SIN DEPARTAMENTO')
+    GROUP BY g.departamento
 ),
 affiliates_by_dept AS (
     SELECT
@@ -447,6 +368,7 @@ affiliates_by_dept AS (
         SUM(f.numero_afiliados) AS total_affiliates
     FROM fact_affiliates f
     JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
+    WHERE g.departamento NOT IN ('SIN DEPARTAMENTO')
     GROUP BY g.departamento
 )
 SELECT
@@ -461,7 +383,7 @@ ORDER BY capacity_per_affiliate ASC;
 
 | DW Tables | Metric/KPI | Main Result |
 |---|---|---|
-| fact_affiliates, fact_facility_capacity, dim_geografia, dim_department | Capacity-to-affiliate ratio by department | Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages. SIN DEPARTAMENTO (non-geolocalized records) is excluded from this analysis. |
+| fact_affiliates, fact_facility_capacity, dim_geografia | Capacity-to-affiliate ratio by department | Smaller departments show highly variable ratios; some have excess capacity while others face critical shortages. SIN DEPARTAMENTO (non-geolocalized records) is excluded from this analysis. |
 
 ### R5 — Regime Distribution by Geographic Region
 
@@ -496,7 +418,6 @@ ORDER BY g.region, total_affiliates DESC;
 | **Business Rules** | NumPersonas > 0; valid regime codes (S, C, E, I) | Enforced during transform; validated in `validate_raw_affiliates()` |
 | **Reconciliation** | Sum of fact measure matches source total within 1% | `validate_sum_consistency()` compares fact total vs. source sum |
 | **Row Count Recovery** | Unique facilities in fact table match source unique facilities | `validate_row_count()` with `nunique('sk_facility')` vs `provider_code.nunique()` |
-| **Department Consistency** | Every department in dim_geografia exists in dim_department | `validate_department_consistency()` cross-checks both dimensions |
 
 ---
 
@@ -509,14 +430,12 @@ After the full ETL pipeline execution, the following results confirm data integr
 | Table | Records | Description |
 |---|---|---|
 | dim_time | 2 | Q2 2022 (affiliates) + Q4 2022 (facilities) |
-| dim_geografia | 2,240 | All municipalities with DANE codes and region |
-| dim_department | 34 | All 32 departments + Bogotá D.C. + SIN DEPARTAMENTO |
-| dim_municipality | 1,168 | Municipalities from affiliates + facility-only municipalities |
+| dim_geografia | 2,240 | All municipalities with DANE codes, region, and API Colombia enrichment (capital, surface, population) |
 | dim_regime | 4 | Subsidized, Contributory, Special, Individual |
-| dim_facility | 10,921 | Unique healthcare providers (IPS) |
+| dim_facility | 10,921 | Unique healthcare providers (IPS) with sk_geografia FK |
 | dim_capacity_type | 63 | CAMAS/SALAS × TPR/Adultos/Pediátrica combinations |
-| fact_affiliates | 3,369 | Quarterly granularity (quarter + municipality + regime) |
-| fact_facility_capacity | 31,496 | Capacity rows per facility + capacity type (deduplicated) |
+| fact_affiliates | 3,369 | Quarterly granularity (geography + regime) |
+| fact_facility_capacity | 31,496 | Capacity rows per facility + capacity type + geography (deduplicated) |
 
 ### Validation Results
 
@@ -535,7 +454,7 @@ After the full ETL pipeline execution, the following results confirm data integr
 | Issue | Root Cause | Fix |
 |---|---|---|
 | 5,072 facility rows silently dropped | Special health districts (Cali, Cartagena, Barranquilla, Santa Marta, Buenaventura) reported as "department" in REPS | `DISTRICT_TO_DEPT` mapping in `config.py` redirects to real departments |
-| 80 municipalities unmapped | CAUCA missing from `DEPT_DANE_CODES`; facility-only municipalities not in affiliates dataset | Added CAUCA (code 19); `build_dim_municipality` now merges both datasets |
+| 80 municipalities unmapped | CAUCA missing from `DEPT_DANE_CODES`; facility-only municipalities not in affiliates dataset | Added CAUCA (code 19); unified `dim_geografia` now merges both datasets |
 | 13,970 duplicate fact keys | Raw REPS data has duplicate rows per facility + capacity type | `build_fact_facility_capacity` now aggregates with `groupby().sum()` |
 | 1,315,701 affiliates lost ("NO APLICA") | `DEPT_NORMALIZE['NO APLICA'] = None` caused silent drop | Map to "SIN DEPARTAMENTO" with DANE code "00"; `raw_total` computed before `clean_affiliates()` |
 | Cauca without region | CAUCA absent from `REGION_MAP` | Added `'CAUCA': 'Pacifico'` |
@@ -566,14 +485,12 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 | File | Records | Content |
 |------|---------|---------|
 | `dim_time.csv` | 2 | Q2 2022 (affiliates) + Q4 2022 (facilities) |
-| `dim_geografia.csv` | 2,240 | Municipalities with DANE codes and region |
-| `dim_department.csv` | 34 | All departments with region |
-| `dim_municipality.csv` | 1,168 | Municipalities linked to departments |
+| `dim_geografia.csv` | 2,240 | Municipalities with DANE codes, region, and API Colombia enrichment |
 | `dim_regime.csv` | 4 | Subsidized, Contributory, Special, Individual |
-| `dim_facility.csv` | 10,921 | Healthcare providers (IPS) with attributes |
+| `dim_facility.csv` | 10,921 | Healthcare providers (IPS) with attributes and sk_geografia FK |
 | `dim_capacity_type.csv` | 63 | CAMAS/SALAS × TPR/Adultos/Pediátrica |
-| `fact_affiliates.csv` | 3,369 | Quarterly affiliate counts by municipality/regime |
-| `fact_capacity.csv` | 31,496 | Capacity records by facility and type |
+| `fact_affiliates.csv` | 3,369 | Quarterly affiliate counts by geography/regime |
+| `fact_capacity.csv` | 31,496 | Capacity records by facility, type, and geography |
 
 > **Note:** Dashboard screenshots are saved in `visualizations/`. Source diagrams are in `diagrams/`.
 
@@ -617,102 +534,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 
 ## 16. System Architecture
 
-```
-┌─────────────────────┐
-│   Source Datasets     │
-│  (SISPRO / REPS)      │
-│  CSV on datos.gov.co  │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   1. EXTRACTION       │
-│   extract.py          │
-│   Read CSV → DF       │
-│   Rename columns      │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   2. RAW VALIDATION   │
-│   validate.py         │
-│   Column check        │
-│   Regime codes        │
-│   Negative values     │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   3. PROFILING /      │
-│      PREPARATION      │
-│   transform.py        │
-│   Clean text          │
-│   Parse numbers       │
-│   Normalize depts     │
-│   Map regions         │
-│   Handle nulls        │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   4. DIMENSIONAL      │
-│      TRANSFORMATION   │
-│   transform.py        │
-│   Build dimensions    │
-│   Build fact tables   │
-│   Surrogate keys      │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   5. VALIDATION       │
-│   validate.py         │
-│   FK integrity        │
-│   Null checks         │
-│   Sum reconciliation  │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   6. LOAD             │
-│   load.py             │
-│   PostgreSQL DW       │
-│   Single transaction  │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   7. CSV EXPORT       
-│   load.py             
-│   data/processed/     
-│   dim_*.csv           
-│   fact_*.csv          
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   8. SQL / KPIs       │
-│   analytical_queries  │
-│   R1–R5 queries       │
-│   Metrics & KPIs      │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   9. BI / DASHBOARD   │
-│   Power BI            │
-│   Connects to DW      │
-│   Maps, KPIs, Filters │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   10. INSIGHTS        │
-│   Interpretation      │
-│   Decision Support    │
-└─────────────────────┘
-```
-
+![System Architecture](diagrams/systemArchitecture.png)
 ---
 
 ## 17. Data Warehouse Implementation
@@ -831,9 +653,7 @@ PHASE 2: TRANSFORMATION
 [TRANSFORM] Records after cleaning: 41427
 [TRANSFORM] Building dimensions...
 [TRANSFORM] Time dimension records: 2
-[TRANSFORM] Geography dimension records: 2240
-[TRANSFORM] Department dimension records: 34
-[TRANSFORM] Municipality dimension records: 1168
+[TRANSFORM] Geography dimension records: 2240 (enriched with API Colombia)
 [TRANSFORM] Regime dimension records: 4
 [TRANSFORM] Facility dimension records: 10921
 [TRANSFORM] Capacity type dimension records: 63
@@ -847,10 +667,8 @@ PHASE 2.5: VALIDATION
 PHASE 3: LOADING
 [LOAD] Schema reset from init.sql
 [LOAD] Loading dimension dim_time: 2 records
-[LOAD] Loading dimension dim_department: 34 records
-[LOAD] Loading dimension dim_municipality: 1168 records
-[LOAD] Loading dimension dim_regime: 4 records
 [LOAD] Loading dimension dim_geografia: 2240 records
+[LOAD] Loading dimension dim_regime: 4 records
 [LOAD] Loading dimension dim_facility: 10921 records
 [LOAD] Loading dimension dim_capacity_type: 63 records
 [LOAD] Loading fact table fact_affiliates: 3369 records
@@ -860,8 +678,6 @@ PHASE 3: LOADING
 PHASE 4: CSV EXPORT
 [EXPORT] Exported dim_time: 2 records
 [EXPORT] Exported dim_geografia: 2240 records
-[EXPORT] Exported dim_department: 34 records
-[EXPORT] Exported dim_municipality: 1168 records
 [EXPORT] Exported dim_regime: 4 records
 [EXPORT] Exported dim_facility: 10921 records
 [EXPORT] Exported dim_capacity_type: 63 records
@@ -904,7 +720,7 @@ DBeaver is a free, universal database tool used to visualize and query the Data 
 4. **Test the connection** → Click "Finish"
 5. **Verify the schema:**
    - Expand `salud_colombia` → Schemas → `public` → Tables
-   - You should see: `dim_time`, `dim_geografia`, `dim_department`, `dim_municipality`, `dim_regime`, `dim_facility`, `dim_capacity_type`, `fact_affiliates`, `fact_facility_capacity`
+   - You should see: `dim_time`, `dim_geografia`, `dim_regime`, `dim_facility`, `dim_capacity_type`, `fact_affiliates`, `fact_facility_capacity`
 6. **Run analytical queries:**
    - Open a SQL editor (right-click `salud_colombia` → SQL Editor → New SQL Editor)
    - Paste queries from `sql/analytical_queries.sql`
@@ -973,11 +789,9 @@ If Windows prompts to install the Npgsql connector or reports missing SSL certif
 | Table | Content |
 |-------|---------|
 | `dim_time` | Time periods (Q2 2022, Q4 2022) |
-| `dim_geografia` | Municipalities with DANE codes and region |
-| `dim_department` | 34 departments with region |
-| `dim_municipality` | 1,168 municipalities |
+| `dim_geografia` | Municipalities with DANE codes, region, and API Colombia enrichment |
 | `dim_regime` | Regime types (Subsidized, Contributory, Special, Individual) |
-| `dim_facility` | 10,921 healthcare facilities (IPS) |
+| `dim_facility` | 10,921 healthcare facilities (IPS) with sk_geografia FK |
 | `dim_capacity_type` | 63 capacity types (CAMAS/SALAS × TPR/Adultos/Pediátrica) |
 | `fact_affiliates` | 3,369 affiliate records (quarterly granularity) |
 | `fact_facility_capacity` | 31,496 capacity records |
@@ -1014,7 +828,7 @@ If Windows prompts to install the Npgsql connector or reports missing SSL certif
 
 | Component | Technology |
 |---|---|
-| Programming | Python 3.11, Pandas, NumPy |
+| Programming | Python 3.11, Pandas, NumPy, Requests |
 | Profiling | Jupyter Notebook |
 | Data Warehouse | PostgreSQL 12+ |
 | ETL Pipeline | Python (extract.py → transform.py → validate.py → load.py) |

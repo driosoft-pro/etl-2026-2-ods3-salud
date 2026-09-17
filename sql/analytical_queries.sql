@@ -3,13 +3,11 @@
 -- ODS 3: Salud y Bienestar / Target 3.8
 --
 -- R1–R5 aligned with README Requirements Matrix
+-- Uses unified dim_geografia dimension (v3 normalized schema).
 -- =====================================================
 
 -- =====================================================
 -- R1: Total Affiliates by Regime Type
--- README: "Determine the total number of affiliates by
---          regime type nationally"
--- KPI: Total affiliates and percentage share per regime
 -- =====================================================
 
 SELECT
@@ -23,9 +21,6 @@ ORDER BY total_affiliates DESC;
 
 -- =====================================================
 -- R2: Top and Bottom Departments by Affiliate Count
--- README: "Identify the departments with the highest and
---          lowest affiliate density"
--- KPI: Top 10 and bottom 10 departments by total affiliates
 -- =====================================================
 
 -- Top 10 departments
@@ -50,10 +45,6 @@ LIMIT 10;
 
 -- =====================================================
 -- R3: Facilities by Nature and Care Level
--- README: "Analyze the distribution of healthcare
---          facilities by nature (public/private) and
---          care level"
--- KPI: Facility count and total capacity by nature/care_level
 -- =====================================================
 
 SELECT
@@ -68,25 +59,18 @@ ORDER BY fc.nature, fc.care_level;
 
 -- =====================================================
 -- R4: Installed Capacity per Affiliate by Department
--- README: "Compare installed capacity (beds, rooms) per
---          affiliate across departments"
--- KPI: capacity-to-affiliate ratio by department
---
--- NOTE: Capacity (Q4 2022) and affiliates (Q2 2022) come
--- from different snapshots. The ratio uses both periods
--- with the caveat that they are not from the same date.
+-- Uses unified dim_geografia for both capacity and
+-- affiliates aggregation.
 -- =====================================================
 
 WITH capacity_by_dept AS (
     SELECT
-        d.name AS department,
+        g.departamento AS department,
         SUM(c.capacity_amount) AS total_capacity
     FROM fact_facility_capacity c
-    JOIN dim_facility fc ON c.sk_facility = fc.sk_facility
-    JOIN dim_municipality m ON fc.sk_municipality = m.sk_municipality
-    JOIN dim_department d ON m.sk_department = d.sk_department
-    WHERE d.name NOT IN ('SIN DEPARTAMENTO')
-    GROUP BY d.name
+    JOIN dim_geografia g ON c.sk_geografia = g.sk_geografia
+    WHERE g.departamento NOT IN ('SIN DEPARTAMENTO')
+    GROUP BY g.departamento
 ),
 affiliates_by_dept AS (
     SELECT
@@ -111,9 +95,6 @@ ORDER BY capacity_per_affiliate ASC;
 
 -- =====================================================
 -- R5: Regime Distribution by Geographic Region
--- README: "Assess the relationship between regime type
---          and geographic distribution"
--- KPI: Affiliate distribution across regions and regimes
 -- =====================================================
 
 SELECT
@@ -139,6 +120,9 @@ SELECT
     g.region,
     g.codigo_dane_depto,
     g.codigo_dane_municipio,
+    g.capital,
+    g.surface,
+    g.population,
     r.description AS regime,
     t.year,
     t.quarter,
@@ -149,21 +133,54 @@ JOIN dim_time t ON f.sk_time = t.sk_time
 JOIN dim_geografia g ON f.sk_geografia = g.sk_geografia
 JOIN dim_regime r ON f.sk_regime = r.sk_regime;
 
--- View: Facility capacity summary with all dimension attributes
+-- View: Facility capacity summary using unified geography
 CREATE OR REPLACE VIEW v_facility_summary AS
 SELECT
-    d.name AS department,
-    d.region AS department_region,
-    m.name AS municipality,
+    g.departamento AS department,
+    g.region AS department_region,
+    g.municipio AS municipality,
+    g.capital,
+    g.surface,
+    g.population,
     i.name AS facility,
     i.nature,
     ct."group" AS capacity_group,
     ct.description AS capacity_type,
     t.year,
-    c.capacity_amount
+    c.capacity_amount,
+    g.codigo_dane_depto,
+    g.codigo_dane_municipio
 FROM fact_facility_capacity c
 JOIN dim_time t ON c.sk_time = t.sk_time
 JOIN dim_facility i ON c.sk_facility = i.sk_facility
-JOIN dim_municipality m ON i.sk_municipality = m.sk_municipality
-JOIN dim_department d ON m.sk_department = d.sk_department
+JOIN dim_geografia g ON c.sk_geografia = g.sk_geografia
 JOIN dim_capacity_type ct ON c.sk_capacity_type = ct.sk_capacity_type;
+
+-- =====================================================
+-- BONUS: API data enrichment queries (from dim_geografia)
+-- =====================================================
+
+-- Population by region (API data in dim_geografia)
+SELECT
+    g.region,
+    SUM(g.population) AS total_population,
+    COUNT(DISTINCT g.departamento) AS department_count
+FROM dim_geografia g
+WHERE g.population > 0
+GROUP BY g.region
+ORDER BY total_population DESC;
+
+-- Departments with capital, surface, population
+SELECT
+    g.departamento,
+    g.capital,
+    g.surface,
+    g.population,
+    g.municipalities_count,
+    g.region_api
+FROM dim_geografia g
+WHERE g.codigo_dane_municipio = g.codigo_dane_depto || '0000'
+   OR LENGTH(g.codigo_dane_municipio) = 5
+GROUP BY g.departamento, g.capital, g.surface, g.population,
+         g.municipalities_count, g.region_api
+ORDER BY g.departamento;

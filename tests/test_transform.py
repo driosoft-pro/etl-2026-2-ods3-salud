@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.extract import extract_all
 from src.transform import (
     clean_affiliates, clean_facilities,
-    build_dim_time, build_dim_geografia, build_dim_department, build_dim_municipality,
+    build_dim_time, build_dim_geografia,
     build_dim_regime, build_dim_facility, build_dim_capacity_type,
     build_fact_affiliates, build_fact_facility_capacity
 )
@@ -117,6 +117,11 @@ class TestDimGeografia:
                      'departamento', 'region']:
             assert col in self.dim.columns, f"Missing column: {col}"
     
+    def test_has_api_columns(self):
+        for col in ['capital', 'surface', 'population', 'municipalities_count',
+                     'phone_prefix', 'region_api']:
+            assert col in self.dim.columns, f"Missing API column: {col}"
+    
     def test_region_values(self):
         valid_regions = {'Amazonia', 'Orinoquia', 'Andina', 'Pacifico',
                          'Caribe', 'Insular', 'Sin Region', 'No geolocalizado'}
@@ -125,57 +130,6 @@ class TestDimGeografia:
     
     def test_no_null_departments(self):
         assert self.dim['departamento'].notna().all()
-
-
-@pytest.mark.unit
-class TestDimDepartment:
-    
-    @pytest.fixture(autouse=True)
-    def setup(self, df_affiliates_clean, df_facilities_clean):
-        self.dim = build_dim_department(df_affiliates_clean, df_facilities_clean)
-    
-    def test_is_dataframe(self):
-        assert isinstance(self.dim, pd.DataFrame)
-    
-    def test_has_sk(self):
-        assert 'sk_department' in self.dim.columns
-    
-    def test_sk_unique(self):
-        assert self.dim['sk_department'].is_unique
-    
-    def test_has_code_name(self):
-        assert 'code' in self.dim.columns
-        assert 'name' in self.dim.columns
-    
-    def test_has_region(self):
-        assert 'region' in self.dim.columns
-        valid_regions = {'Amazonia', 'Orinoquia', 'Andina', 'Pacifico',
-                         'Caribe', 'Insular', 'Sin Region', 'No geolocalizado'}
-        actual = set(self.dim['region'].unique())
-        assert actual <= valid_regions, f"Unexpected regions: {actual - valid_regions}"
-
-
-@pytest.mark.unit
-class TestDimMunicipality:
-    
-    @pytest.fixture(autouse=True)
-    def setup(self, df_affiliates_clean, df_facilities_clean):
-        self.dim_dept = build_dim_department(df_affiliates_clean, df_facilities_clean)
-        self.dim = build_dim_municipality(df_affiliates_clean, df_facilities_clean, self.dim_dept)
-    
-    def test_is_dataframe(self):
-        assert isinstance(self.dim, pd.DataFrame)
-    
-    def test_has_sk(self):
-        assert 'sk_municipality' in self.dim.columns
-    
-    def test_has_fk_department(self):
-        assert 'sk_department' in self.dim.columns
-    
-    def test_valid_fk(self):
-        valid_depts = set(self.dim_dept['sk_department'])
-        valid_fk = self.dim['sk_department'].isin(valid_depts)
-        assert valid_fk.all(), "There are invalid foreign keys in sk_department"
 
 
 @pytest.mark.unit
@@ -207,9 +161,8 @@ class TestDimFacility:
     def setup(self, raw_data):
         self.df_fac = clean_facilities(raw_data['facilities'])
         self.df_aff = clean_affiliates(raw_data['affiliates'])
-        self.dim_dept = build_dim_department(self.df_aff, self.df_fac)
-        self.dim_mun = build_dim_municipality(self.df_aff, self.df_fac, self.dim_dept)
-        self.dim = build_dim_facility(self.df_fac, self.dim_mun, self.dim_dept)
+        self.dim_geo = build_dim_geografia(self.df_aff, self.df_fac)
+        self.dim = build_dim_facility(self.df_fac, self.dim_geo)
     
     def test_is_dataframe(self):
         assert isinstance(self.dim, pd.DataFrame)
@@ -217,12 +170,12 @@ class TestDimFacility:
     def test_has_sk(self):
         assert 'sk_facility' in self.dim.columns
     
-    def test_has_fk_municipality(self):
-        assert 'sk_municipality' in self.dim.columns
+    def test_has_fk_geografia(self):
+        assert 'sk_geografia' in self.dim.columns
     
-    def test_valid_fk_municipality(self):
-        valid_mun = set(self.dim_mun['sk_municipality'])
-        assert self.dim['sk_municipality'].isin(valid_mun).all(), "Invalid FK in sk_municipality"
+    def test_valid_fk_geografia(self):
+        valid_geo = set(self.dim_geo['sk_geografia'])
+        assert self.dim['sk_geografia'].isin(valid_geo).all(), "Invalid FK in sk_geografia"
 
 
 @pytest.mark.unit
@@ -295,20 +248,6 @@ class TestValidate:
         errors = validate_no_duplicates(df, ['sk_time', 'sk_geografia', 'sk_regime'])
         assert len(errors) > 0
 
-    def test_validate_department_consistency_clean(self):
-        from src.validate import validate_department_consistency
-        geo = pd.DataFrame({'departamento': ['ANTIOQUIA', 'CAUCA', 'AMAZONAS']})
-        dept = pd.DataFrame({'name': ['ANTIOQUIA', 'CAUCA', 'AMAZONAS']})
-        errors = validate_department_consistency(geo, dept)
-        assert len(errors) == 0
-
-    def test_validate_department_consistency_missing(self):
-        from src.validate import validate_department_consistency
-        geo = pd.DataFrame({'departamento': ['ANTIOQUIA', 'AMAZONAS', 'GUAVIARE']})
-        dept = pd.DataFrame({'name': ['ANTIOQUIA']})
-        errors = validate_department_consistency(geo, dept)
-        assert len(errors) == 0 or 'AMAZONAS' in errors[0]
-
     def test_all_departments_have_dane_codes(self):
         from src.config import DEPT_DANE_CODES, REGION_MAP
         for dept in REGION_MAP:
@@ -334,15 +273,3 @@ class TestValidate:
             depts = set(sin_region['department'].unique())
             assert depts <= {'SIN DEPARTAMENTO'}, \
                 f"Real departments incorrectly mapped to Sin Region: {depts - {'SIN DEPARTAMENTO'}}"
-
-    def test_validate_department_region_consistency(self):
-        from src.validate import validate_department_region_consistency
-        dept = pd.DataFrame({'name': ['ANTIOQUIA', 'SIN DEPARTAMENTO'], 'region': ['Andina', 'Sin Region']})
-        errors = validate_department_region_consistency(dept)
-        assert len(errors) == 0
-
-    def test_validate_department_region_consistency_fails(self):
-        from src.validate import validate_department_region_consistency
-        dept = pd.DataFrame({'name': ['ANTIOQUIA', 'VALLE'], 'region': ['Sin Region', 'Sin Region']})
-        errors = validate_department_region_consistency(dept)
-        assert len(errors) > 0

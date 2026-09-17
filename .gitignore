@@ -13,7 +13,7 @@ ENV/
 .ipynb_checkpoints/
 
 # Data processed files (keep raw data)
-data/processed/*.csv
+#data/processed/*.csv
 !data/processed/.gitkeep
 
 # Generated output (dashboard screenshots)

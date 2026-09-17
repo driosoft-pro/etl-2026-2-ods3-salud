@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import psycopg2
 from psycopg2.extras import execute_values
 from .config import DB_CONFIG
@@ -9,6 +10,25 @@ logger = logging.getLogger(__name__)
 
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
+
+def _convert_to_python_types(values: list) -> list:
+    """Convert numpy types to native Python types for psycopg2 compatibility."""
+    converted = []
+    for row in values:
+        new_row = []
+        for val in row:
+            if isinstance(val, (np.integer,)):
+                new_row.append(int(val))
+            elif isinstance(val, (np.floating,)):
+                new_row.append(float(val) if not np.isnan(val) else None)
+            elif isinstance(val, np.bool_):
+                new_row.append(bool(val))
+            elif isinstance(val, np.ndarray):
+                new_row.append(val.tolist())
+            else:
+                new_row.append(val)
+        converted.append(new_row)
+    return converted
 
 def reset_schema(conn):
     init_path = os.path.join(os.path.dirname(__file__), '..', 'sql', 'init.sql')
@@ -25,6 +45,7 @@ def load_dimension(conn, table_name: str, df: pd.DataFrame, pk_col: str):
         columns = list(df.columns)
         quoted = [f'"{c}"' for c in columns]
         values = df[columns].values.tolist()
+        values = _convert_to_python_types(values)
         
         insert_sql = f"""
             INSERT INTO {table_name} ({', '.join(quoted)})
@@ -45,6 +66,7 @@ def load_fact(conn, table_name: str, df: pd.DataFrame, pk_col: str):
         columns = [c for c in df.columns if c != pk_col]
         quoted = [f'"{c}"' for c in columns]
         values = df[columns].values.tolist()
+        values = _convert_to_python_types(values)
         
         insert_sql = f"""
             INSERT INTO {table_name} ({', '.join(quoted)})
@@ -63,10 +85,8 @@ def load_all(dimensions: dict, facts: dict):
         reset_schema(conn)
 
         load_dimension(conn, 'dim_time', dimensions['time'], 'sk_time')
-        load_dimension(conn, 'dim_department', dimensions['department'], 'sk_department')
-        load_dimension(conn, 'dim_municipality', dimensions['municipality'], 'sk_municipality')
-        load_dimension(conn, 'dim_regime', dimensions['regime'], 'sk_regime')
         load_dimension(conn, 'dim_geografia', dimensions['geografia'], 'sk_geografia')
+        load_dimension(conn, 'dim_regime', dimensions['regime'], 'sk_regime')
         load_dimension(conn, 'dim_facility', dimensions['facility'], 'sk_facility')
         load_dimension(conn, 'dim_capacity_type', dimensions['capacity_type'], 'sk_capacity_type')
         

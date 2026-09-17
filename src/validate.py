@@ -90,37 +90,10 @@ def validate_row_count(fact_df: pd.DataFrame, raw_count: int,
         )
     return errors
 
-def validate_department_consistency(dim_geografia: pd.DataFrame,
-                                     dim_department: pd.DataFrame) -> list:
-    errors = []
-    geo_depts = set(dim_geografia['departamento'].unique())
-    dept_names = set(dim_department['name'].unique())
-    missing = geo_depts - dept_names
-    if missing:
-        errors.append(
-            f"Departments in dim_geografia not in dim_department: {sorted(missing)}"
-        )
-    return errors
-
-def validate_department_region_consistency(dim_department: pd.DataFrame) -> list:
-    errors = []
-    known_exceptions = {'SIN DEPARTAMENTO'}
-    sin_region = dim_department[
-        (dim_department['region'] == 'Sin Region') &
-        (~dim_department['name'].isin(known_exceptions))
-    ]
-    if len(sin_region) > 0:
-        depts = sorted(sin_region['name'].tolist())
-        errors.append(
-            f"Real departments mapped to 'Sin Region' (should have a region): {depts}"
-        )
-    return errors
-
 def run_all_validations(fact_affiliates: pd.DataFrame, fact_capacity: pd.DataFrame,
                          dim_time: pd.DataFrame, dim_geografia: pd.DataFrame,
                          dim_regime: pd.DataFrame, dim_facility: pd.DataFrame,
                          dim_capacity_type: pd.DataFrame,
-                         dim_department: pd.DataFrame = None,
                          original_total: int = None,
                          raw_facility_count: int = None) -> dict:
     all_errors = {}
@@ -153,6 +126,7 @@ def run_all_validations(fact_affiliates: pd.DataFrame, fact_capacity: pd.DataFra
             'sk_time': ('dim_time', dim_time, 'sk_time'),
             'sk_facility': ('dim_facility', dim_facility, 'sk_facility'),
             'sk_capacity_type': ('dim_capacity_type', dim_capacity_type, 'sk_capacity_type'),
+            'sk_geografia': ('dim_geografia', dim_geografia, 'sk_geografia'),
         }
     )
     all_errors['fact_capacity_fk'] = capacity_fk
@@ -160,12 +134,6 @@ def run_all_validations(fact_affiliates: pd.DataFrame, fact_capacity: pd.DataFra
     if raw_facility_count is not None:
         row_errors = validate_row_count(fact_capacity, raw_facility_count, unique_col='sk_facility')
         all_errors['fact_capacity_rows'] = row_errors
-    
-    if dim_department is not None:
-        dept_errors = validate_department_consistency(dim_geografia, dim_department)
-        all_errors['department_consistency'] = dept_errors
-        region_errors = validate_department_region_consistency(dim_department)
-        all_errors['department_region_consistency'] = region_errors
     
     total_errors = sum(len(v) for v in all_errors.values())
     if total_errors == 0:

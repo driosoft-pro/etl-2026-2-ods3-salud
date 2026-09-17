@@ -5,7 +5,7 @@ import pandas as pd
 from .extract import extract_all
 from .transform import (
     clean_affiliates, clean_facilities,
-    build_dim_time, build_dim_geografia, build_dim_department, build_dim_municipality,
+    build_dim_time, build_dim_geografia,
     build_dim_regime, build_dim_facility, build_dim_capacity_type,
     build_fact_affiliates, build_fact_facility_capacity
 )
@@ -51,21 +51,20 @@ def run_etl():
         logger.info("Building dimensions...")
         dim_time = build_dim_time(df_affiliates, df_facilities)
         dim_geografia = build_dim_geografia(df_affiliates, df_facilities)
-        dim_department = build_dim_department(df_affiliates, df_facilities)
-        dim_municipality = build_dim_municipality(df_affiliates, df_facilities, dim_department)
         dim_regime = build_dim_regime(df_affiliates)
-        dim_facility = build_dim_facility(df_facilities, dim_municipality, dim_department)
+        dim_facility = build_dim_facility(df_facilities, dim_geografia)
         dim_capacity_type = build_dim_capacity_type(df_facilities)
         
         logger.info("Building fact tables...")
         fact_affiliates = build_fact_affiliates(df_affiliates, dim_time, dim_geografia, dim_regime)
-        fact_capacity = build_fact_facility_capacity(df_facilities, dim_time, dim_facility, dim_capacity_type, dim_municipality, dim_department)
+        fact_capacity = build_fact_facility_capacity(
+            df_facilities, dim_time, dim_facility, dim_capacity_type, dim_geografia
+        )
         
         logger.info("PHASE 2.5: VALIDATION")
         validations = run_all_validations(
             fact_affiliates, fact_capacity,
             dim_time, dim_geografia, dim_regime, dim_facility, dim_capacity_type,
-            dim_department=dim_department,
             original_total=raw_total,
             raw_facility_count=df_facilities['provider_code'].nunique()
         )
@@ -76,8 +75,6 @@ def run_etl():
         dimensions = {
             'time': dim_time,
             'geografia': dim_geografia,
-            'department': dim_department,
-            'municipality': dim_municipality,
             'regime': dim_regime,
             'facility': dim_facility,
             'capacity_type': dim_capacity_type
@@ -99,17 +96,15 @@ def run_etl():
         logger.info("=" * 60)
         
         print("\n LOAD SUMMARY:")
-        print(f"   dim_time:          {len(dim_time)} records")
-        print(f"   dim_geografia:     {len(dim_geografia)} records")
-        print(f"   dim_department:    {len(dim_department)} records")
-        print(f"   dim_municipality:  {len(dim_municipality)} records")
-        print(f"   dim_regime:        {len(dim_regime)} records")
-        print(f"   dim_facility:      {len(dim_facility)} records")
-        print(f"   dim_capacity_type: {len(dim_capacity_type)} records")
-        print(f"   fact_affiliates:   {len(fact_affiliates)} records (quarterly)")
-        print(f"   fact_capacity:     {len(fact_capacity)} records")
-        print(f"   validations:       {total_errors} errors")
-        print(f"   CSV export:        data/processed/ directory")
+        print(f"   dim_time:              {len(dim_time)} records")
+        print(f"   dim_geografia:         {len(dim_geografia)} records")
+        print(f"   dim_regime:            {len(dim_regime)} records")
+        print(f"   dim_facility:          {len(dim_facility)} records")
+        print(f"   dim_capacity_type:     {len(dim_capacity_type)} records")
+        print(f"   fact_affiliates:       {len(fact_affiliates)} records (quarterly)")
+        print(f"   fact_capacity:         {len(fact_capacity)} records")
+        print(f"   validations:           {total_errors} errors")
+        print(f"   CSV export:            data/processed/ directory")
         
     except Exception as e:
         logger.error(f"ETL process error: {e}")

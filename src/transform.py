@@ -5,6 +5,7 @@ from .config import (
     MONTHS, REGION_MAP, REGIME_MAP, DEPT_NORMALIZE,
     DEPT_DANE_CODES, DISTRICT_TO_DEPT, normalize_text
 )
+from .api_extract import fetch_departments_from_api, fetch_regions_from_api
 import logging
 
 logger = logging.getLogger(__name__)
@@ -104,8 +105,10 @@ def build_dim_time(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> 
     return dim_time
 
 def build_dim_geografia(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> pd.DataFrame:
-    logger.info("Building geography dimension...")
+    """Build unified geography dimension with API Colombia enrichment."""
+    logger.info("Building unified geography dimension (with API enrichment)...")
     
+    # --- Step 1: Build base geography from CSV data ---
     geo_aff = df_affiliates[['municipality_code', 'municipality', 'department_code',
                               'department', 'region']].drop_duplicates()
     geo_aff.columns = ['codigo_dane_municipio', 'municipio', 'codigo_dane_depto',
@@ -129,60 +132,68 @@ def build_dim_geografia(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame
         subset=['codigo_dane_municipio']
     ).reset_index(drop=True)
     
+    # --- Step 2: Enrich with API Colombia data ---
+    api_df = fetch_departments_from_api()
+    
+    # Initialize API columns with defaults
+    dim_geo['capital'] = ''
+    dim_geo['surface'] = None
+    dim_geo['population'] = None
+    dim_geo['municipalities_count'] = None
+    dim_geo['phone_prefix'] = ''
+    dim_geo['region_api'] = ''
+    
+    if not api_df.empty:
+        regions_df = fetch_regions_from_api()
+        region_map = {}
+        if not regions_df.empty:
+            region_map = regions_df.set_index('region_id')['region_name'].to_dict()
+        
+        # Map API department names to DANE codes using our normalized names
+        dept_name_to_code = dim_geo.drop_duplicates('departamento').set_index('departamento')['codigo_dane_depto'].to_dict()
+        
+        api_df['department_code'] = api_df['department_name'].map(
+            lambda n: dept_name_to_code.get(n, None)
+        )
+        
+        # Handle special aliases
+        API_ALIAS = {
+            'BOGOTA': 'BOGOTA D.C.',
+            'BOGOTA D.C.': 'BOGOTA D.C.',
+            'SAN ANDRES Y PROVIDENCIA': 'SAN ANDRES',
+        }
+        for api_name, dept_name in API_ALIAS.items():
+            mask = api_df['department_name'] == api_name
+            if mask.any() and dept_name in dept_name_to_code:
+                api_df.loc[mask, 'department_code'] = dept_name_to_code[dept_name]
+        
+        api_df['region_api'] = api_df['region_id'].map(region_map).fillna('')
+        
+        matched = api_df['department_code'].notna().sum()
+        logger.info(f"API departments matched to DANE codes: {matched}/{len(api_df)}")
+        
+        # Build lookup from DANE dept code to API data
+        api_lookup = api_df.dropna(subset=['department_code']).set_index('department_code')
+        
+        # Enrich each row in dim_geo by department code
+        for idx, row in dim_geo.iterrows():
+            dept_code = row['codigo_dane_depto']
+            if dept_code in api_lookup.index:
+                api_row = api_lookup.loc[dept_code]
+                # Get first match if multiple
+                if isinstance(api_row, pd.DataFrame):
+                    api_row = api_row.iloc[0]
+                dim_geo.at[idx, 'capital'] = api_row.get('capital', '')
+                dim_geo.at[idx, 'surface'] = api_row.get('surface', None)
+                dim_geo.at[idx, 'population'] = api_row.get('population', None)
+                dim_geo.at[idx, 'municipalities_count'] = api_row.get('municipalities_count', None)
+                dim_geo.at[idx, 'phone_prefix'] = api_row.get('phone_prefix', '')
+                dim_geo.at[idx, 'region_api'] = api_row.get('region_api', '')
+    
     dim_geo['sk_geografia'] = dim_geo.index + 1
     
     logger.info(f"Geography dimension records: {len(dim_geo)}")
     return dim_geo
-
-def build_dim_department(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame) -> pd.DataFrame:
-    logger.info("Building department dimension...")
-    
-    all_depts = set(df_affiliates['department'].unique()) | set(df_facilities['department'].unique())
-    
-    rows = []
-    for dept in sorted(all_depts):
-        code = DEPT_DANE_CODES.get(dept, df_affiliates[df_affiliates['department'] == dept]['department_code'].iloc[0]
-                                   if dept in df_affiliates['department'].values else None)
-        if code:
-            region = REGION_MAP.get(dept, 'Sin Region')
-            rows.append({'code': code, 'name': dept, 'region': region})
-    
-    dim_dept = pd.DataFrame(rows).drop_duplicates(subset=['code']).reset_index(drop=True)
-    dim_dept['sk_department'] = dim_dept.index + 1
-    
-    logger.info(f"Department dimension records: {len(dim_dept)}")
-    return dim_dept
-
-def build_dim_municipality(df_affiliates: pd.DataFrame, df_facilities: pd.DataFrame, 
-                           dim_dept: pd.DataFrame) -> pd.DataFrame:
-    logger.info("Building municipality dimension...")
-    
-    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
-    
-    mun_aff = df_affiliates[['municipality_code', 'municipality', 'department']].drop_duplicates()
-    mun_aff.columns = ['code', 'name', 'dept_name']
-    mun_aff['sk_department'] = mun_aff['dept_name'].map(dept_to_sk)
-    mun_aff = mun_aff.drop(columns=['dept_name']).dropna(subset=['sk_department'])
-    mun_aff['sk_department'] = mun_aff['sk_department'].astype(int)
-    
-    fac_munis = df_facilities[['municipality', 'department']].drop_duplicates()
-    fac_munis.columns = ['name', 'dept_name']
-    fac_munis['sk_department'] = fac_munis['dept_name'].map(dept_to_sk)
-    fac_munis = fac_munis.dropna(subset=['sk_department'])
-    fac_munis['sk_department'] = fac_munis['sk_department'].astype(int)
-    existing = set(zip(mun_aff['name'], mun_aff['sk_department']))
-    fac_munis = fac_munis[~fac_munis.apply(lambda r: (r['name'], r['sk_department']) in existing, axis=1)]
-    fac_munis['code'] = fac_munis.apply(
-        lambda r: f"{dept_to_sk.get(r['dept_name'], '00')}{int.from_bytes(hashlib.md5(r['name'].encode()).digest()[:4], 'big') % 10000:04d}",
-        axis=1
-    )
-    fac_munis = fac_munis[['code', 'name', 'sk_department']]
-    
-    dim_mun = pd.concat([mun_aff, fac_munis]).drop_duplicates(subset=['code']).reset_index(drop=True)
-    dim_mun['sk_municipality'] = dim_mun.index + 1
-    
-    logger.info(f"Municipality dimension records: {len(dim_mun)}")
-    return dim_mun
 
 def build_dim_regime(df_affiliates: pd.DataFrame) -> pd.DataFrame:
     logger.info("Building regime dimension...")
@@ -195,8 +206,8 @@ def build_dim_regime(df_affiliates: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"Regime dimension records: {len(dim_reg)}")
     return dim_reg
 
-def build_dim_facility(df_facilities: pd.DataFrame, dim_mun: pd.DataFrame,
-                       dim_dept: pd.DataFrame) -> pd.DataFrame:
+def build_dim_facility(df_facilities: pd.DataFrame, dim_geo: pd.DataFrame) -> pd.DataFrame:
+    """Build facility dimension with sk_geografia FK (unified geography)."""
     logger.info("Building facility dimension...")
     
     dim_fac = df_facilities[['provider_code', 'provider_name', 'nit', 'nature',
@@ -207,17 +218,16 @@ def build_dim_facility(df_facilities: pd.DataFrame, dim_mun: pd.DataFrame,
                         'care_level', 'manager', 'address', 'email',
                         'phone', 'municipality_name', 'dept_name']
     
-    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
-    fac_muni_map = dim_mun.set_index(['name', 'sk_department'])['sk_municipality'].to_dict()
-    
-    dim_fac['sk_municipality'] = dim_fac.apply(
-        lambda r: fac_muni_map.get((r['municipality_name'], dept_to_sk.get(r['dept_name']))), axis=1
+    # Map to sk_geografia using (municipio, departamento)
+    geo_key = dim_geo.set_index(['municipio', 'departamento'])['sk_geografia'].to_dict()
+    dim_fac['sk_geografia'] = dim_fac.apply(
+        lambda r: geo_key.get((r['municipality_name'], r['dept_name'])), axis=1
     )
-    dim_fac = dim_fac.dropna(subset=['sk_municipality'])
-    dim_fac['sk_municipality'] = dim_fac['sk_municipality'].astype(int)
+    dim_fac = dim_fac.dropna(subset=['sk_geografia'])
+    dim_fac['sk_geografia'] = dim_fac['sk_geografia'].astype(int)
     
     dim_fac = dim_fac.drop(columns=['municipality_name', 'dept_name'])
-    dim_fac = dim_fac.drop_duplicates(subset=['provider_code', 'sk_municipality']).reset_index(drop=True)
+    dim_fac = dim_fac.drop_duplicates(subset=['provider_code', 'sk_geografia']).reset_index(drop=True)
     dim_fac['sk_facility'] = dim_fac.index + 1
     
     logger.info(f"Facility dimension records: {len(dim_fac)}")
@@ -264,7 +274,8 @@ def build_fact_affiliates(df_affiliates: pd.DataFrame, dim_time: pd.DataFrame,
 
 def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataFrame,
                                   dim_fac: pd.DataFrame, dim_ct: pd.DataFrame,
-                                  dim_mun: pd.DataFrame, dim_dept: pd.DataFrame) -> pd.DataFrame:
+                                  dim_geo: pd.DataFrame) -> pd.DataFrame:
+    """Build facility capacity fact table using unified geography."""
     logger.info("Building facility capacity fact table...")
     
     time_key = (2022, 4)
@@ -275,17 +286,16 @@ def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataF
     fact = df_facilities[['provider_code', 'capacity_group', 'capacity_description',
                            'installed_capacity', 'municipality', 'department']].copy()
     
-    dept_to_sk = dim_dept.set_index('name')['sk_department'].to_dict()
-    muni_to_sk = dim_mun.set_index(['name', 'sk_department'])['sk_municipality'].to_dict()
-    fact['sk_municipality'] = fact.apply(
-        lambda r: muni_to_sk.get((r['municipality'], dept_to_sk.get(r['department']))), axis=1
+    # Map to sk_geografia using (municipio, departamento)
+    geo_key = dim_geo.set_index(['municipio', 'departamento'])['sk_geografia'].to_dict()
+    fact['sk_geografia'] = fact.apply(
+        lambda r: geo_key.get((r['municipality'], r['department'])), axis=1
     )
-    fact = fact.dropna(subset=['sk_municipality'])
-    fact['sk_municipality'] = fact['sk_municipality'].astype(int)
     
-    fac_key = dim_fac.set_index(['provider_code', 'sk_municipality'])['sk_facility'].to_dict()
+    # Map to sk_facility using (provider_code, sk_geografia)
+    fac_key = dim_fac.set_index(['provider_code', 'sk_geografia'])['sk_facility'].to_dict()
     fact['sk_facility'] = fact.apply(
-        lambda r: fac_key.get((r['provider_code'], r['sk_municipality'])), axis=1
+        lambda r: fac_key.get((r['provider_code'], r['sk_geografia'])), axis=1
     )
     
     ct_key = dim_ct.set_index(['group', 'description'])['sk_capacity_type'].to_dict()
@@ -295,12 +305,13 @@ def build_fact_facility_capacity(df_facilities: pd.DataFrame, dim_time: pd.DataF
     
     fact['sk_time'] = sk_time_val
     
-    fact = fact.dropna(subset=['sk_time', 'sk_facility', 'sk_capacity_type'])
+    fact = fact.dropna(subset=['sk_time', 'sk_facility', 'sk_capacity_type', 'sk_geografia'])
     fact['sk_time'] = fact['sk_time'].astype(int)
     fact['sk_facility'] = fact['sk_facility'].astype(int)
     fact['sk_capacity_type'] = fact['sk_capacity_type'].astype(int)
+    fact['sk_geografia'] = fact['sk_geografia'].astype(int)
     
-    fact = fact.groupby(['sk_time', 'sk_facility', 'sk_capacity_type']).agg(
+    fact = fact.groupby(['sk_time', 'sk_facility', 'sk_capacity_type', 'sk_geografia']).agg(
         capacity_amount=('installed_capacity', 'sum')
     ).reset_index()
     
