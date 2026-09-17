@@ -6,7 +6,45 @@
 
 ---
 
-## 1. Definición del Problema Colombiano
+## 1. Objetivo del Proyecto
+
+### 1.1 Objetivo General
+
+Diseñar e implementar un **pipeline ETL** que transforme datos de salud crudos de fuentes abiertas colombianas en un **almacén de datos dimensional** (esquema estrella) para analizar disparidades geográficas en el acceso a la salud, alineado con la Meta 3.8 del ODS.
+
+### 1.2 Objetivos Específicos
+
+| # | Objetivo | Entregable |
+|---|----------|------------|
+| O1 | Perfilar y limpiar datasets crudos (afiliados + establecimientos) | Archivos CSV limpios con correcciones de calidad |
+| O2 | Diseñar esquema estrella normalizado (5 dimensiones, 2 tablas de hechos) | Script DDL `sql/init.sql` |
+| O3 | Construir pipeline ETL automatizado (Extract → Transform → Validate → Load) | Módulos Python `src/` |
+| O4 | Enriquecer datos geográficos con API Colombia (capital, superficie, población) | `dim_geografia` con datos externos |
+| O5 | Cargar datos en PostgreSQL y exportar CSVs para herramientas BI | DW PostgreSQL + CSVs en `data/processed/` |
+| O6 | Responder 5 requisitos analíticos (R1–R5) con consultas SQL | `sql/analytical_queries.sql` |
+| O7 | Visualizar resultados en dashboard Power BI | `visualizations/dashboard.png` |
+
+### 1.3 Granularidad del Proyecto
+
+| Aspecto | Alcance |
+|---------|---------|
+| **Geográfico** | Nacional — 33 departamentos + Bogotá D.C., 1,046+ municipios |
+| **Temporal** | Snapshots transversales: Q2 2022 (afiliados), Q4 2022 (establecimientos) |
+| **Institucional** | Establecimientos de salud (IPS) registrados en REPS |
+| **Régimen** | Subsidiado, Contributivo, Especial, Individual |
+| **Infraestructura** | Camas (CAMAS), salas de procedimientos (SALAS), equipos por nivel de atención |
+
+### 1.4 Resultados Esperados
+
+- **5 tablas de dimensión**: `dim_time`, `dim_geografia`, `dim_regime`, `dim_facility`, `dim_capacity_type`
+- **2 tablas de hechos**: `fact_affiliates` (3,369 filas), `fact_facility_capacity` (31,496 filas)
+- **Dimensión geográfica unificada** enriquecida con datos de API Colombia (capital, superficie, población)
+- **Dashboard Power BI** con mapas geográficos, KPIs y gráficos de distribución por régimen
+- **5 consultas analíticas** respondiendo los requisitos R1–R5
+
+---
+
+## 2. Definición del Problema Colombiano
 
 El sistema de salud de Colombia enfrenta significativas disparidades territoriales en el acceso a servicios. Si bien el país ha alcanzado altas tasas de afiliación a través del Sistema General de Seguridad Social en Salud (SGSSS), la distribución de la infraestructura de salud (camas, equipos, servicios especializados) no se corresponde proporcionalmente con las necesidades de la población en los departamentos y municipios. Algunas regiones mantienen alta capacidad por afiliado mientras que otras enfrentan déficits críticos.
 
@@ -25,7 +63,7 @@ Comprender la relación entre la densidad de afiliación y la capacidad de infra
 
 ---
 
-## 2. Objetivo Analítico y Requisitos (R1–R5)
+## 3. Objetivo Analítico y Requisitos (R1–R5)
 
 **Objetivo Analítico:** Analizar la distribución de afiliados a la salud y la capacidad de infraestructura en los territorios colombianos para identificar disparidades geográficas y respaldar decisiones de asignación de recursos alineadas con la Meta 3.8 del ODS.
 
@@ -41,7 +79,7 @@ Comprender la relación entre la densidad de afiliación y la capacidad de infra
 
 ---
 
-## 3. Alineación con los ODS
+## 4. Alineación con los ODS
 
 **ODS 3 — Salud y Bienestar**
 **Meta 3.8:** Lograr la cobertura sanitaria universal (CSU), incluyendo la protección contra el riesgo financiero, el acceso a servicios esenciales de salud de calidad y el acceso a medicamentos y vacunas esenciales seguros, eficaces, de calidad y asequibles para todos.
@@ -94,7 +132,7 @@ El SGSSS de Colombia alcanza ~99% de afiliación a nivel nacional, pero la afili
 
 ---
 
-## 5. Perfilamiento de Datos y Evaluación de Calidad
+## 6. Perfilamiento de Datos y Evaluación de Calidad
 
 ### 5.1 Dataset de Afiliados
 
@@ -143,7 +181,7 @@ El SGSSS de Colombia alcanza ~99% de afiliación a nivel nacional, pero la afili
 
 ---
 
-## 6. Trazabilidad de Requisitos a Datos
+## 7. Trazabilidad de Requisitos a Datos
 
 | Requisito | Atributos Requeridos | Transformación Necesaria | KPI / Análisis Esperado |
 |---|---|---|---|
@@ -155,7 +193,7 @@ El SGSSS de Colombia alcanza ~99% de afiliación a nivel nacional, pero la afili
 
 ---
 
-## 7. Estrategia de Preparación de Datos
+## 8. Estrategia de Preparación de Datos
 
 | Problema Detectado | Estrategia | Justificación |
 |---|---|---|
@@ -180,7 +218,7 @@ El SGSSS de Colombia alcanza ~99% de afiliación a nivel nacional, pero la afili
 
 ---
 
-## 9. Modelo de Datos Dimensional
+## 10. Modelo de Datos Dimensional
 
 ### 9.1 Esquema Estrella
 
@@ -219,7 +257,7 @@ Ambas referencian la misma dimensión conformada `dim_geografia` directamente, h
 
 ---
 
-## 10. Pipeline ETL
+## 11. Pipeline ETL
 
 ### 10.1 Arquitectura
 
@@ -271,7 +309,7 @@ Ambas referencian la misma dimensión conformada `dim_geografia` directamente, h
 
 ---
 
-## 11. Validación de Requisitos a Modelo
+## 12. Validación de Requisitos a Modelo
 
 | Requisito | Dimensión(es) | Medida(s) | KPI / Consulta Esperado | ¿Soportado? |
 |---|---|---|---|---|
@@ -284,7 +322,7 @@ Ambas referencian la misma dimensión conformada `dim_geografia` directamente, h
 
 ---
 
-## 12. Consultas Analíticas y KPIs
+## 13. Consultas Analíticas y KPIs
 
 Todas las consultas se ejecutan contra el Data Warehouse de PostgreSQL.
 
@@ -406,7 +444,7 @@ ORDER BY g.region, total_affiliates DESC;
 
 ---
 
-## 13. Reglas de Validación ETL
+## 14. Reglas de Validación ETL
 
 | Categoría de Regla | Validación | Implementación |
 |---|---|---|
@@ -466,7 +504,7 @@ Después de la ejecución completa del pipeline ETL, los siguientes resultados c
 
 ---
 
-## 14. Inteligencia de Negocios
+## 15. Inteligencia de Negocios
 
 Un dashboard de Power BI se conecta al Data Warehouse de PostgreSQL y proporciona:
 
@@ -498,7 +536,7 @@ Un dashboard de Power BI se conecta al Data Warehouse de PostgreSQL y proporcion
 
 ---
 
-## 15. Interpretación Analítica
+## 16. Interpretación Analítica
 
 ### Hallazgo 1: Concentración del Régimen Subsidiado en Regiones Periféricas
 
@@ -532,7 +570,7 @@ Un dashboard de Power BI se conecta al Data Warehouse de PostgreSQL y proporcion
 
 ---
 
-## 16. Arquitectura del Sistema
+## 17. Arquitectura del Sistema
 
 ![System Architecture](diagrams/systemArchitecture.png)
 ---
@@ -813,7 +851,7 @@ Si Windows solicita instalar el conector Npgsql o reporta certificados SSL falta
 
 ---
 
-## 18. Limitaciones y Supuestos
+## 19. Limitaciones y Supuestos
 
 1. **Limitación de instantánea temporal:** Ambos datasets son instantáneas transversales (Q2 2022 para afiliados, Q4 2022 para establecimientos). El análisis de tendencias temporales verdadero requeriría múltiples períodos.
 2. **Brechas en nivel de atención:** El 61% de los registros de establecimientos carecen de un valor de nivel de atención, limitando la granularidad del análisis por nivel de atención. Los valores faltantes se almacenan como NULL en el data warehouse.
@@ -824,7 +862,7 @@ Si Windows solicita instalar el conector Npgsql o reporta certificados SSL falta
 
 ---
 
-## 19. Tecnologías
+## 20. Tecnologías
 
 | Componente | Tecnología |
 |---|---|
@@ -871,7 +909,7 @@ Esto configura automáticamente Python 3.12, PostgreSQL, Docker/Podman, Jupyter 
 
 ---
 
-## 21. Estructura del Proyecto
+## 22. Estructura del Proyecto
 
 ```
 etl-project-first-delivery/
@@ -902,7 +940,7 @@ etl-project-first-delivery/
 
 ---
 
-## 22. Reproducibilidad
+## 23. Reproducibilidad
 
 ### Inicio Rápido con Docker/Podman
 

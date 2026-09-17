@@ -6,7 +6,45 @@
 
 ---
 
-## 1. Colombian Problem Definition
+## 1. Project Objective
+
+### 1.1 General Objective
+
+Design and implement an **ETL pipeline** that transforms raw healthcare data from Colombian open data sources into a **dimensional data warehouse** (star schema) to analyze geographic disparities in healthcare access, aligned with SDG Target 3.8.
+
+### 1.2 Specific Objectives
+
+| # | Objective | Deliverable |
+|---|-----------|-------------|
+| O1 | Profile and clean raw datasets (affiliates + facilities) | Clean CSV files with data quality fixes |
+| O2 | Design a normalized star schema (5 dimensions, 2 fact tables) | `sql/init.sql` DDL script |
+| O3 | Build an automated ETL pipeline (Extract → Transform → Validate → Load) | `src/` Python modules |
+| O4 | Enrich geographic data with API Colombia (capital, surface, population) | `dim_geografia` with external data |
+| O5 | Load data into PostgreSQL and export CSVs for BI tools | PostgreSQL DW + `data/processed/` CSVs |
+| O6 | Answer 5 analytical requirements (R1–R5) with SQL queries | `sql/analytical_queries.sql` |
+| O7 | Visualize results in Power BI dashboard | `visualizations/dashboard.png` |
+
+### 1.3 Project Granularity
+
+| Aspect | Scope |
+|--------|-------|
+| **Geographic** | National — 33 departments + Bogotá D.C., 1,046+ municipalities |
+| **Temporal** | Cross-sectional snapshots: Q2 2022 (affiliates), Q4 2022 (facilities) |
+| **Institutional** | Healthcare facilities (IPS) registered in REPS |
+| **Regime** | Subsidized, Contributory, Special, Individual |
+| **Infrastructure** | Beds (CAMAS), procedural rooms (SALAS), equipment by care level |
+
+### 1.4 Expected Results
+
+- **5 dimension tables**: `dim_time`, `dim_geografia`, `dim_regime`, `dim_facility`, `dim_capacity_type`
+- **2 fact tables**: `fact_affiliates` (3,369 rows), `fact_facility_capacity` (31,496 rows)
+- **Unified geography dimension** enriched with API Colombia data (capital, surface, population)
+- **Power BI dashboard** with geographic maps, KPIs, and regime distribution charts
+- **5 analytical queries** answering R1–R5 requirements
+
+---
+
+## 2. Colombian Problem Definition
 
 Colombia's healthcare system faces significant territorial disparities in access to services. While the country has achieved high affiliation rates through the General System of Social Security in Health (SGSSS), the distribution of healthcare infrastructure (beds, equipment, specialized services) does not proportionally match the population's needs across departments and municipalities. Some regions maintain high capacity per affiliate while others face critical shortages.
 
@@ -25,7 +63,7 @@ Understanding the relationship between affiliation density and infrastructure ca
 
 ---
 
-## 2. Analytical Objective and Requirements (R1–R5)
+## 3. Analytical Requirements (R1–R5)
 
 **Analytical Objective:** Analyze the distribution of healthcare affiliates and infrastructure capacity across Colombian territories to identify geographic disparities and support resource allocation decisions aligned with SDG Target 3.8.
 
@@ -41,7 +79,7 @@ Understanding the relationship between affiliation density and infrastructure ca
 
 ---
 
-## 3. SDG Alignment
+## 4. SDG Alignment
 
 **SDG 3 — Good Health and Well-Being**
 **Target 3.8:** Achieve universal health coverage (UHC), including financial risk protection, access to quality essential healthcare services, and access to safe, effective, quality, and affordable essential medicines and vaccines for all.
@@ -56,7 +94,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ---
 
-## 4. Dataset Source Selection
+## 5. Dataset Source Selection
 
 | Characteristic | Affiliates Dataset | Facilities Dataset |
 |---|---|---|
@@ -94,7 +132,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ---
 
-## 5. Data Profiling and Quality Assessment
+## 6. Data Profiling and Quality Assessment
 
 ### 5.1 Affiliates Dataset
 
@@ -143,7 +181,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ---
 
-## 6. Requirements-to-Data Traceability
+## 7. Requirements-to-Data Traceability
 
 | Requirement | Required Attributes | Transformation Needed | Expected KPI / Analysis |
 |---|---|---|---|
@@ -155,7 +193,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ---
 
-## 7. Data Preparation Strategy
+## 8. Data Preparation Strategy
 
 | Issue Detected | Strategy | Justification |
 |---|---|---|
@@ -172,7 +210,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ---
 
-## 8. Grain Declaration
+## 9. Grain Declaration
 
 **One row in `fact_affiliates` represents** the total number of accumulated healthcare affiliates for a specific regime type (Subsidized, Contributory, Special, or Individual) in a specific geography (municipality/department/region) during a specific quarter (Q2 2022).
 
@@ -180,7 +218,7 @@ Colombia's SGSSS achieves ~99% affiliation nationally, but affiliation does not 
 
 ---
 
-## 9. Dimensional Data Model
+## 10. Dimensional Data Model
 
 ### 9.1 Star Schema
 
@@ -219,7 +257,7 @@ Both reference the same conformed `dim_geografia` dimension directly, enabling c
 
 ---
 
-## 10. ETL Pipeline
+## 11. ETL Pipeline
 
 ### 10.1 Architecture
 
@@ -271,7 +309,7 @@ Both reference the same conformed `dim_geografia` dimension directly, enabling c
 
 ---
 
-## 11. Requirements-to-Model Validation
+## 12. Requirements-to-Model Validation
 
 | Requirement | Dimension(s) | Measure(s) | Expected Query/KPI | Supported? |
 |---|---|---|---|---|
@@ -284,7 +322,7 @@ Both reference the same conformed `dim_geografia` dimension directly, enabling c
 
 ---
 
-## 12. Analytical Queries and KPIs
+## 13. Analytical Queries and KPIs
 
 All queries run against the PostgreSQL Data Warehouse.
 
@@ -406,7 +444,7 @@ ORDER BY g.region, total_affiliates DESC;
 
 ---
 
-## 13. ETL Validation Rules
+## 14. ETL Validation Rules
 
 | Rule Category | Validation | Implementation |
 |---|---|---|
@@ -421,7 +459,7 @@ ORDER BY g.region, total_affiliates DESC;
 
 ---
 
-## 13.1 Data Quality Verification Results
+## 14.1 Data Quality Verification Results
 
 After the full ETL pipeline execution, the following results confirm data integrity:
 
@@ -466,7 +504,7 @@ After the full ETL pipeline execution, the following results confirm data integr
 
 ---
 
-## 14. Business Intelligence
+## 15. Business Intelligence
 
 A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 
@@ -498,7 +536,7 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 
 ---
 
-## 15. Analytical Interpretation
+## 16. Analytical Interpretation
 
 ### Finding 1: Subsidized Regime Concentration in Peripheral Regions
 
@@ -532,12 +570,12 @@ A Power BI dashboard connects to the PostgreSQL Data Warehouse and provides:
 
 ---
 
-## 16. System Architecture
+## 17. System Architecture
 
 ![System Architecture](diagrams/systemArchitecture.png)
 ---
 
-## 17. Data Warehouse Implementation
+## 18. Data Warehouse Implementation
 
 ### Prerequisites
 
@@ -813,7 +851,7 @@ If Windows prompts to install the Npgsql connector or reports missing SSL certif
 
 ---
 
-## 18. Limitations and Assumptions
+## 19. Limitations and Assumptions
 
 1. **Temporal snapshot limitation:** Both datasets are cross-sectional snapshots (Q2 2022 for affiliates, Q4 2022 for facilities). True temporal trend analysis would require multiple periods.
 2. **Care level gaps:** 61% of facility records lack a care level value, limiting the granularity of care-level analysis. Missing values are stored as NULL in the data warehouse.
@@ -824,7 +862,7 @@ If Windows prompts to install the Npgsql connector or reports missing SSL certif
 
 ---
 
-## 19. Technologies
+## 20. Technologies
 
 | Component | Technology |
 |---|---|
@@ -860,7 +898,7 @@ This automatically sets up Python 3.12, PostgreSQL, Docker/Podman, Jupyter, and 
 
 ---
 
-## 20. Team Members and Responsibilities
+## 21. Team Members and Responsibilities
 
 | Member | Role | Responsibilities |
 |---|---|---|
@@ -871,7 +909,7 @@ This automatically sets up Python 3.12, PostgreSQL, Docker/Podman, Jupyter, and 
 
 ---
 
-## 21. Project Structure
+## 22. Project Structure
 
 ```
 etl-project-first-delivery/
@@ -902,7 +940,7 @@ etl-project-first-delivery/
 
 ---
 
-## 22. Reproducibility
+## 23. Reproducibility
 
 ### Quick Start with Docker/Podman
 
